@@ -1,0 +1,20 @@
+{
+    "name": "ha-aog-firestore",
+    "description": "ha-aog-firestore",
+    "version": "0.0.1",
+    "main": "index.js",
+    "private": true,
+    "license": "MIT",
+    "dependencies": {
+        "body-parser": "latest",
+        "cookie-parser": "latest",
+        "ejs": "latest",
+        "express": "latest",
+        "firebase-admin": "latest",
+        "firebase-functions": "latest",
+        "node-fetch": "latest",
+        "oauth2-server": "latest",
+        "morgan": "latest",
+        "util": "latest"
+    }
+}

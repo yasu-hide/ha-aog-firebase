@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>login</title>
+    <script src="https://www.gstatic.com/firebasejs/4.6.2/firebase.js"></script>
+    <script type="text/javascript">
+      firebase.initializeApp({
+        apiKey: "<%=config.apiKey%>",
+        authDomain: "<%=config.authDomain%>",
+        databaseURL: "<%=config.databaseURL%>",
+        storageBucket: "<%=config.storageBucket%>",
+      });
+    </script>
+    <script src="https://cdn.firebase.com/libs/firebaseui/2.5.1/firebaseui.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/ui/2.5.1/firebase-ui-auth__ja.js"></script>
+    <link type="text/css" rel="stylesheet" href="https://cdn.firebase.com/libs/firebaseui/2.5.1/firebaseui.css" />
+    <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/2.5.1/firebase-ui-auth.css" />
+    <script type="text/javascript">
+      const ui = new firebaseui.auth.AuthUI(firebase.auth());
+      const redirect_uri = '<%=redirect_uri%>?state=<%=state%>'
+      ui.start('#firebaseui-auth-container', {
+        callbacks: {
+          signInSuccess: (currentUser, credential, redirectUrl) => {
+            currentUser.getToken(true).then((idToken) => {
+              const xhr = new XMLHttpRequest();
+              xhr.open('POST', window.location, true);
+              xhr.setRequestHeader('Authorization', 'Bearer ' + idToken);
+              xhr.setRequestHeader('Content-Type', 'application/json');
+              xhr.addEventListener('loadend', () => {
+                if(xhr.status === 200) {
+                  window.location.replace(redirect_uri + '&code=' + xhr.responseText);
+                } else {
+                  console.error(xhr.status + ' ' + xhr.statusText);
+                  console.error(xhr.responseText);
+                }
+              });
+              xhr.send(JSON.stringify({ response_type:'code' }));
+            }).catch(console.error);
+            return false;
+          },
+          uiShown: () => {
+            document.getElementById('loader').style.display = 'none';
+          }
+        },
+        signInOptions: [
+          firebase.auth.GoogleAuthProvider.PROVIDER_ID,
+          firebase.auth.FacebookAuthProvider.PROVIDER_ID,
+          firebase.auth.TwitterAuthProvider.PROVIDER_ID,
+          firebase.auth.GithubAuthProvider.PROVIDER_ID,
+        ]
+      });
+    </script>
+  </head>
+  <body>
+    <div id="firebaseui-auth-container"></div>
+    <div id="loader">Loading...</div>
+  </body>
+</html>

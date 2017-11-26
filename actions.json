@@ -1,0 +1,17 @@
+{
+    "actions": [{
+        "name": "actions.devices",
+        "deviceControl": {
+        },
+        "fulfillment": {
+            "conversationName": "automation"
+        }
+    }],
+    "conversations": {
+        "automation": {
+            "name": "automation",
+            "url": "https://us-central1-<プロジェクト名>.cloudfunctions.net/ha"
+        }
+    },
+    "locale": "ja"
+}
