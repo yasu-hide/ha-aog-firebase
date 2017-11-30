@@ -1,0 +1,13 @@
+{
+    "name": "test",
+    "description": "test",
+    "version": "0.0.1",
+    "main": "index.js",
+    "private": true,
+    "license": "MIT",
+    "dependencies": {
+        "broadlinkjs-rm": "latest",
+        "firebase": "latest",
+        "firebase-admin": "^5.5.1"
+    }
+}
