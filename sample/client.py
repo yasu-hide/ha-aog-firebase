@@ -176,13 +176,18 @@ class RemoteCodes(BaseCollection):
         self.argparse.add_argument('--values', required=True, action='append')
         args = self.argparse.parse_args(opts)
         try:
+            docref = self.client.collection(self.collectionPath).document(args.device_id).collection(args.remote_type).document(args.action)
             for v in args.values:
                 if '=' not in v:
                     raise ValueError('{} value separated with "=" was required'.format(v))
                 kv,vv = v.split('=')
                 if kv is None or vv is None:
                     raise ValueError('{} value with key and value was required'.format(v))
-                update_time = self.client.collection(self.collectionPath).document(args.device_id).collection(args.remote_type).document(args.action).update({kv: vv})
+                try:
+                    docref.get()
+                    update_time = self.client.collection(self.collectionPath).document(args.device_id).collection(args.remote_type).document(args.action).update({kv: vv})
+                except:
+                    update_time = self.client.collection(self.collectionPath).document(args.device_id).collection(args.remote_type).add({kv: vv}, args.action)
                 if update_time:
                     cpath = [self.collectionPath, args.device_id, args.remote_type, args.action, args.values]
                     cpath = [ str(i) for i in cpath ]
@@ -222,8 +227,38 @@ class RemoteCodes(BaseCollection):
             sys.exit(1)
         return
 
-class UserDevices(GroupDevices):
+class UserDevices(BaseCollection):
     collectionPath = 'user_devices'
+    def add(self, opts=[]):
+        self.argparse.add_argument('--device-id', required=True)
+        self.argparse.add_argument('--user-id', required=True)
+        self.argparse.add_argument('--remote-id', required=True)
+        self.argparse.add_argument('--name')
+        args = self.argparse.parse_args(opts)
+        deviceReference = self.client.collection(Devices.collectionPath).document(args.device_id)
+        if deviceReference is None:
+            sys.stderr.write("{} cannot referenced, check Devices\n".format(deviceId))
+            sys.exit(1)
+        userReference  = self.client.collection(Users.collectionPath).document(args.user_id)
+        if userReference is None:
+            sys.stderr.write("{} cannot referenced, check Groups\n".format(userId))
+            sys.exit(1)
+        remoteReference = self.client.collection(Remotes.collectionPath).document(args.remote_id)
+        if remoteReference is None:
+            sys.stderr.write("{} cannot referenced, check Remotes\n".format(remoteId))
+            sys.exit(1)
+        docdata = {
+            'deviceId': args.device_id,
+            'userId' : args.user_id,
+            'remoteId': args.remote_id,
+            'deviceReference': deviceReference,
+            'userReference' : userReference,
+            'remoteReference': remoteReference
+        }
+        if args.name:
+            docdata['name'] = args.name
+        self.add_to_db(docdata)
+        return
     def delete(self, opts=[]):
         self.argparse.add_argument('--user-device-id', required=True)
         args = self.argparse.parse_args(opts)
