@@ -225,10 +225,8 @@ const execute = (req, res, params={}) => {
             let deviceId = new String(curDevice.id);
             let commandsData = [];
             curCommand.execution.forEach((curExec) => {
-                let execcmd = curExec.command;
-                let execargs = curExec.params;
-                commandsData.push({ command : execcmd, params: execargs });
-                resPromises.push(Model.setStates(deviceId, execargs));
+                commandsData.push({ command : curExec.command, params: curExec.params });
+                resPromises.push(Model.setStates(deviceId, curExec.params));
             });
             resPromises.push(Model.setCommands(deviceId, commandsData));
             respCommands.push({ ids: [ deviceId ], status: "SUCCESS"});
