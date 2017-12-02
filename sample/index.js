@@ -13,20 +13,27 @@ const convert_actions = (actionType, actionParam) => {
         return actionParam;
     }
 }
+
 const broadlink_commander = (macaddr, commands=[]) => {
-    const rm = broadlink({host: macaddr, log: console.log});
-    if(rm) {
-        commands.forEach((cmdhex) => {
-            if(cmdhex) {
-                const timer = setInterval(() => {
-                    console.log('sendto', macaddr, cmdhex);
-                    rm.sendData(new Buffer(cmdhex, "hex"));
-                    clearInterval(timer);
-                }, 100);
+    return new Promise((resolve, reject) => {
+        macaddr = String(macaddr).toLowerCase();
+        const timer = setInterval(function() {
+            const rm = broadlink({host: macaddr, log: console.log})
+            if (rm) {
+                clearInterval(timer);
+                resolve(rm);
             }
+        }, 100);
+    }).then((rm) => {
+        commands.forEach((cmdhex) => {
+            if(!cmdhex) {
+                return;
+            }
+            console.log('sendto', macaddr, cmdhex);
+            const hexDataBuf = new Buffer(cmdhex, "hex");
+            rm.sendData(hexDataBuf);
         });
-        return true;
-    }
+    }).catch(console.error);
 };
 
 admin.database().ref('commands').on('child_added', (snap) => {
