@@ -52,8 +52,8 @@ admin.database().ref('commands').on('child_added', (snap) => {
                 const cmdkey = convert_actions(cmd.command, cmd.params);
                 deviceCommandPromises.push(remoteCommand.doc(cmd.command).get().then((remoteCommandDocsnap) => {
                     const cmddata = remoteCommandDocsnap.data();
-                    if(cmddata.cmdkey) {
-                        return cmddata.cmdkey;
+                    if(cmddata[cmdkey]) {
+                        return cmddata[cmdkey];
                     }
                 }));
             });
