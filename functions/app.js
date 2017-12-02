@@ -101,7 +101,10 @@ Model.getGroup = (groupId) => {
 };
 Model.getCommands = (indivDeviceId) => {
     return getFromDatabase('commands', indivDeviceId).then((snap) => {
-        return snap.val();
+        return {
+            id: indivDeviceId,
+            data: snap.val()
+        };
     });
 };
 Model.setCommands = (indivDeviceId, commandData) => {
@@ -109,7 +112,10 @@ Model.setCommands = (indivDeviceId, commandData) => {
 };
 Model.getStates = (indivDeviceId) => {
     return getFromDatabase('states', indivDeviceId).then((snap) => {
-        return snap.val();
+        return {
+            id: indivDeviceId,
+            data: snap.val()
+        };
     });
 };
 Model.setStates = (indivDeviceId, statesData) => {
@@ -138,7 +144,6 @@ const valuniq = (obj) => {
     return newret;
 }
 const flatten = (arr) => Array.isArray(arr) ? [].concat.apply([], arr.map(flatten)) : arr;
-
 
 const sync = (req, res, params={}) => {
     const deviceProps = { requestId: req.body.requestId, payload: { agentUserId: params.uid, devices: [] } };
@@ -204,8 +209,9 @@ const query = (req, res, params={}) => {
     reqStates.forEach((reqDevice) => {
         resPromises.push(Model.getStates(reqDevice.id));
     });
+    const payload_devices = {};
     Promise.all(resPromises).then((states) => {
-        deviceStates['payload']['devices'] = states;
+        deviceStates['payload']['devices'] = states.reduce((o,c) => Object.assign(o, {[c.id]: c.data}), {});
         console.log('query:', JSON.stringify(deviceStates));
         res.status(200).json(deviceStates);
         return;
@@ -226,7 +232,6 @@ const execute = (req, res, params={}) => {
             let commandsData = [];
             curCommand.execution.forEach((curExec) => {
                 commandsData.push({ command : curExec.command, params: curExec.params });
-                resPromises.push(Model.setStates(deviceId, curExec.params));
             });
             resPromises.push(Model.setCommands(deviceId, commandsData));
             respCommands.push({ ids: [ deviceId ], status: "SUCCESS"});
@@ -317,8 +322,8 @@ const showError = (res, message) => {
 };
 
 exports.root = (req, res) => {
-    console.info('/ query', req.query);
-    console.info('/ body', req.body);
+    console.info('/ query', JSON.stringify(req.query));
+    console.info('/ body', JSON.stringify(req.body));
     const oauth = new OAuth2Server({ model: require("./oauth2").AuthModel });
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(req);

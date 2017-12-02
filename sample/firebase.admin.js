@@ -100,7 +100,10 @@ Model.getGroup = (groupId) => {
 };
 Model.getCommands = (indivDeviceId) => {
     return getFromDatabase('commands', indivDeviceId).then((snap) => {
-        return snap.val();
+        return {
+            id: indivDeviceId,
+            data: snap.val()
+        };
     });
 };
 Model.setCommands = (indivDeviceId, commandData) => {
@@ -108,7 +111,10 @@ Model.setCommands = (indivDeviceId, commandData) => {
 };
 Model.getStates = (indivDeviceId) => {
     return getFromDatabase('states', indivDeviceId).then((snap) => {
-        return snap.val();
+        return {
+            id: indivDeviceId,
+            data: snap.val()
+        };
     });
 };
 Model.setStates = (indivDeviceId, statesData) => {
