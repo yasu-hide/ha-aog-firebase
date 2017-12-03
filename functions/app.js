@@ -148,12 +148,13 @@ const flatten = (arr) => Array.isArray(arr) ? [].concat.apply([], arr.map(flatte
 const sync = (req, res, params={}) => {
     const deviceProps = { requestId: req.body.requestId, payload: { agentUserId: params.uid, devices: [] } };
     const payload_data = (deviceId, deviceNickname, deviceData) => {
-        let deviceType = deviceData.type;
-        let deviceManufacturer = deviceData.manufacturer;
-        let deviceModel = deviceData.model;
+        const deviceType = deviceData.type;
+        const deviceManufacturer = deviceData.manufacturer;
+        const deviceModel = deviceData.model;
+        const devicewillReportState = deviceData.willReportState;
+        const deviceTraits = deviceData.traits;
+        const deviceAttributes = deviceData.attributes;
         let deviceName = deviceData.name;
-        let devicewillReportState = deviceData.willReportState;
-        let deviceTraits = deviceData.traits;
         if(!deviceName) {
             if(deviceManufacturer && deviceModel) {
                 deviceName = new String('' + deviceManufacturer + ' ' + deviceModel);
@@ -181,6 +182,9 @@ const sync = (req, res, params={}) => {
         }
         if(deviceTraits) {
             device_payload['traits'] = deviceTraits;
+        }
+        if(deviceAttributes) {
+            device_payload['attributes'] = deviceAttributes;
         }
         return device_payload;
     };
