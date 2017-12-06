@@ -24,7 +24,8 @@ IFTTTでGoogle Assistant連携をセットアップすると、単純な言葉�
 - Google Assistant対応端末 (Android, Google Home)
 
 ## 使い方
-- [USAGE.md](USAGE.md)
+- [Setup.md](Setup.md)
+- [Usage.md](Usage.md)
 
 ## TODO
 - [ ] ユーザ管理とデバイス登録のUI

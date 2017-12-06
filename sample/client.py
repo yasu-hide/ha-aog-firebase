@@ -4,40 +4,35 @@ import argparse
 import firebase_admin
 from firebase_admin import credentials,firestore
 import pprint
-import json
+import json, urllib.request
 
 class BaseCollection(object):
+    baseUrl = 'https://homegraph.googleapis.com'
     collectionRootPath = None
-    def __init__(self, client, args):
+    def __init__(self, client, apikey=None):
         self.client = client
-        self.args = args
-    def getSubCollectionRef(self, docsnap):
-        for subcollectionPath in self.client._firestore_api.list_collection_ids(docsnap.reference._document_path):
-            docpath = list(docsnap.reference._path)
-            docpath.append(subcollectionPath)
-            yield self.getCollectionRef('/'.join(docpath))
-    def getCollectionRef(self, collectionPath=None):
+        self.apikey = apikey
+    def _get_colref(self, collectionPath=None):
         if collectionPath is None:
             collectionPath = self.collectionRootPath
         return self.client.collection(collectionPath)
-    def get_snap(self, docsnap):
-        id_dict = { 'id': docsnap.id }
-        data_dict = docsnap.to_dict()
+    def _get_doc(self, documentSnap):
+        id_dict = { 'id': documentSnap.id }
+        data_dict = documentSnap.to_dict()
         merged_dict = { **id_dict, **data_dict }
         yield { k: v.get().to_dict() if isinstance(v, firestore.DocumentReference) else v for k, v in merged_dict.items() }
-    def get(self, dockey=None):
-        collectionref = self.getCollectionRef()
+    def _get(self, dockey=None):
+        collectionref = self._get_colref()
         docsnaps = []
         if dockey:
-            docsnaps = [ self.getCollectionRef().document(dockey).get() ]
+            docsnaps = [ self._get_colref().document(dockey).get() ]
         else:
-            docsnaps = self.getCollectionRef().get()
+            docsnaps = self._get_colref().get()
         for docsnap in docsnaps:
-            yield self.get_snap(docsnap)
-
-    def add(self, docdata={}):
+            yield self._get_doc(docsnap)
+    def _add(self, docdata={}):
         try:
-            update_time, docref = self.client.collection(self.collectionRootPath).add(docdata)
+            update_time, docref = self._get_colref().add(docdata)
             if update_time:
                 sys.stdout.write("{} was added\n".format(self.collectionRootPath + '/' + docref.id))
             else:
@@ -47,9 +42,9 @@ class BaseCollection(object):
             sys.stderr.write(str(e) + "\n")
             sys.exit(1)
         return docref
-    def delete(self, dockey):
+    def _del(self, dockey):
         try:
-            docref = self.client.collection(self.collectionRootPath).document(dockey)
+            docref = self._get_colref().document(dockey)
             if(docref.get().exists):
                 times = docref.delete()
                 if times:
@@ -60,7 +55,40 @@ class BaseCollection(object):
             (t, e) = sys.exc_info()[:2]
             sys.stderr.write(str(e) + "\n")
             sys.exit(1)
-        return
+        return docref
+    def getDeviceReference(self, device_id, checkExists=False):
+        deviceReference = self._get_colref(Device.collectionRootPath).document(device_id)
+        if checkExists == True and deviceReference is None:
+            sys.stderr.write("{} cannot referenced, check Devices\n".format(device_id))
+            sys.exit(1)
+        return deviceReference
+    def getGroupReference(self, group_id, checkExists=False):
+        groupReference = self._get_colref(Group.collectionRootPath).document(group_id)
+        if checkExists == True and groupReference is None:
+            sys.stderr.write("{} cannot referenced, check Groups\n".format(group_id))
+            sys.exit(1)
+        return groupReference
+    def getRemoteReference(self, remote_id, checkExists=False):
+        remoteReference = self._get_colref(Remote.collectionRootPath).document(remote_id)
+        if checkExists == True and remoteReference is None:
+            sys.stderr.write("{} cannot referenced, check Remotes\n".format(remote_id))
+            sys.exit(1)
+        return remoteReference
+    def getUserReference(self, user_id, checkExists=False):
+        userReference = self._get_colref(User.collectionPath).document(user_id)
+        if checkExists == True and userReference is None:
+            sys.stderr.write("{} cannot referenced, check Groups\n".format(userId))
+            sys.exit(1)
+        return userReference
+    def requestSync(self, agent_user_id):
+        if not self.apikey:
+            return
+        url = self.baseUrl + '/v1/devices:requestSync?key=' + self.apiKey
+        headers = { 'Content-Type': 'application/json' }
+        data = json.dumps({ 'agent_user_id' : agent_user_id }).encode()
+        req = urllib.request.Request(url, data=data, method='POST', headers=headers)
+        with urllib.request.urlopen(req) as res:
+            return res.status, res.reason
 class Device(BaseCollection):
     collectionRootPath = 'devices'
 class Remote(BaseCollection):
@@ -76,14 +104,14 @@ class GroupDevice(BaseCollection):
 
 class GetDevice(Device):
     arguments = (
-        ('--device-id',     str,    False),
-        ('--full',          bool,   False),
+        ('--device-id',     { 'type': str,    'required': False}),
+        ('--full',          { 'type': bool,   'required': False}),
     )
-    def run(self):
-        device_id = self.args.device_id
-        show_full = self.args.full
+    def run(self, args=object):
+        device_id = args.device_id
+        show_full = args.full
         device_info = {}
-        for device in self.get(device_id):
+        for device in self._get(device_id):
             device_basic_info = None
             for dev in device:
                 device_id = dev['id']
@@ -99,20 +127,20 @@ class GetDevice(Device):
 
 class AddDevice(Device):
     arguments = (
-        ('--manufacturer',  str,    True),
-        ('--model',         str,    True),
-        ('--traits',        list,   True),
-        ('--type',          str,    True),
-        ('--report-state',  bool,   False),
-        ('--name',          str,    False),
+        ('--manufacturer',  { 'type': str,    'required': True }),
+        ('--model',         { 'type': str,    'required': True }),
+        ('--traits',        { 'type': list,   'required': True, 'choices': ( 'Brightness', 'CameraStream', 'ColorSpectrum', 'ColorTemperature', 'Dock', 'Modes', 'OnOff', 'RunCycle', 'Scene', 'StartStop', 'TemperatureSetting', 'Toggles', ) }),
+        ('--type',          { 'type': str,    'required': True, 'choices': ( 'CAMERA', 'DISHWASHER', 'DRYER', 'LIGHT', 'OUTLET', 'SCENE', 'SWITCH', 'THERMOSTAT', 'VACUUM', 'WASHER', ) }),
+        ('--report-state',  { 'type': bool,   'required': False }),
+        ('--name',          { 'type': str,    'required': False }),
     )
-    def run(self):
-        device_manufacturer = self.args.manufacturer
-        device_model = self.args.model
-        device_traits = self.args.traits
-        device_type = self.args.type
-        device_report_state = self.args.report_state
-        device_name = self.args.name
+    def run(self, args=object):
+        device_manufacturer = args.manufacturer
+        device_model = args.model
+        device_traits = [ 'action.devices.traits.' + t for t in args.traits ]
+        device_type = 'action.devices.type.' + args.type
+        device_report_state = args.report_state
+        device_name = args.name
         docdata = {
             'manufacturer': device_manufacturer,
             'model': device_model,
@@ -122,29 +150,29 @@ class AddDevice(Device):
         }
         if device_name:
             docdata['name'] = device_name
-        self.add(docdata)
+        self._add(docdata)
         return
 
 class DelDevice(Device):
     arguments = (
-        ('--device-id',     str,    True),
+        ('--device-id',     { 'type': str,    'required': True }),
     )
-    def run(self):
-        device_id = self.args.device_id
-        self.delete(device_id)
+    def run(self, args=object):
+        device_id = args.device_id
+        self._del(device_id)
         return
 
 class GetDeviceAttribute(Device):
     arguments = (
-        ('--device-id',     str,    True),
-        ('--attr-name',     str,    False),
-        ('--full',          bool,   False),
+        ('--device-id',     { 'type': str,    'required': True }),
+        ('--attr-name',     { 'type': str,    'required': False }),
+        ('--full',          { 'type': bool,   'required': False }),
     )
-    def run(self):
-        device_id = self.args.device_id
-        attr_name = self.args.attr_name
-        show_full = self.args.full
-        for device in self.get(device_id):
+    def run(self, args=object):
+        device_id = args.device_id
+        attr_name = args.attr_name
+        show_full = args.full
+        for device in self._get(device_id):
             for dev in device:
                 if 'attributes' not in dev:
                     continue
@@ -156,36 +184,36 @@ class GetDeviceAttribute(Device):
 
 class AddDeviceAttribute(Device):
     arguments = (
-        ('--device-id',     str,    True),
-        ('--attr-name',     str,    True),
-        ('--attr-data',     str,    True),
+        ('--device-id',     { 'type': str,    'required': True }),
+        ('--attr-name',     { 'type': str,    'required': True }),
+        ('--attr-data',     { 'type': str,    'required': True }),
     )
-    def run(self):
-        device_id = self.args.device_id
-        attr_name = self.args.attr_name
-        attr_data = self.args.attr_data
-        attr_data = json.load(attr_data)
+    def run(self, args=object):
+        device_id = args.device_id
+        attr_name = args.attr_name
+        attr_data = args.attr_data
+        attr_data = json.loads(attr_data)
         docdata = {
             'attributes' : { attr_name: attr_data }
         }
-        update_time = self.client.collection(self.collectionRootPath).document(device_id).update(docdata)
+        update_time = self.getDeviceReference(device_id).update(docdata)
         return
 
 class DelDeviceAttribute(Device):
     arguments = (
-        ('--device-id',     str,    True),
-        ('--attr-name',     str,    True),
+        ('--device-id',     { 'type': str,    'required': True }),
+        ('--attr-name',     { 'type': str,    'required': True }),
     )
 
 class GetRemote(Remote):
     arguments = (
-        ('--remote-id',     str,    False),
-        ('--full',          bool,   False),
+        ('--remote-id',     { 'type': str,    'required': False }),
+        ('--full',          { 'type': bool,   'required': False }),
     )
-    def run(self):
-        remote_id = self.args.remote_id
-        show_full = self.args.full
-        for remote in self.get(remote_id):
+    def run(self, args=object):
+        remote_id = args.remote_id
+        show_full = args.full
+        for remote in self._get(remote_id):
             for r in remote:
                 remote_id = r['id']
                 del r['id']
@@ -201,62 +229,63 @@ class GetRemote(Remote):
 
 class AddRemote(Remote):
     arguments = (
-        ('--mac-addr',      str,    True),
-        ('--remote-type',   str,    True),
-        ('--name',          str,    False),
+        ('--mac-addr',      { 'type': str,    'required': True }),
+        ('--remote-type',   { 'type': str,    'required': True }),
+        ('--name',          { 'type': str,    'required': False }),
     )
-    def run(self):
-        remote_macaddr = self.args.mac_addr
-        remote_type = self.args.remote_type
-        remote_name = self.args.name
+    def run(self, args=object):
+        remote_macaddr = args.mac_addr
+        remote_type = args.remote_type
+        remote_name = args.name
         docdata = {
             'mac_addr': remote_macaddr,
             'type': remote_type
         }
         if remote_name:
             docdata['name'] = remote_name
-        self.add(docdata)
+        self._add(docdata)
         return
 
 class DelRemote(Remote):
     arguments = (
-        ('--remote-id',      str,    True),
+        ('--remote-id',     { 'type': str,    'required': True }),
     )
-    def run(self):
-        remote_id = self.args.remote_id
-        self.delete(remote_id)
+    def run(self, args=object):
+        remote_id = args.remote_id
+        self._del(remote_id)
         return
 
 class GetRemoteCode(Device):
     arguments = (
-        ('--device-id',     str,    True),
-        ('--remote-type',   str,    True),
+        ('--device-id',     { 'type': str,    'required': True }),
+        ('--remote-type',   { 'type': str,    'required': True }),
     )
-    def run(self):
-        device_id = self.args.device_id
-        remote_type = self.args.remote_type
+    def run(self, args=object):
+        device_id = args.device_id
+        remote_type = args.remote_type
         remote_collection = '/'.join((self.collectionRootPath, device_id, remote_type))
-        for docsnap in self.getCollectionRef(remote_collection).get():
+        for docsnap in self._get_colref(remote_collection).get():
             action = docsnap.id
-            for remote in self.get_snap(docsnap):
+            for remote in self._get_doc(documentSnap=docsnap):
                 del remote['id']
                 pprint.pprint({action: remote})
         return
 
 class AddRemoteCode(Device):
     arguments = (
-        ('--device-id',     str,    True),
-        ('--remote-type',   str,    True),
-        ('--action',        str,    True),
-        ('--values',        list,   True),
+        ('--device-id',     { 'type': str,    'required': True }),
+        ('--remote-type',   { 'type': str,    'required': True }),
+        ('--action',        { 'type': str,    'required': True }),
+        ('--values',        { 'type': list,   'required': True }),
     )
-    def run(self):
-        device_id = self.args.device_id
-        remote_type = self.args.remote_type
-        remotecode_action = self.args.action
-        remotecode_values = self.args.values
+    def run(self, args):
+        device_id = args.device_id
+        remote_type = args.remote_type
+        remotecode_action = args.action
+        remotecode_values = args.values
         try:
-            docref = self.client.collection(self.collectionRootPath).document(device_id).collection(remote_type).document(remotecode_action)
+            colref = self.getDeviceReference(device_id, True).collection(remote_type)
+            docref = colref.document(remotecode_action)
             for v in remotecode_values:
                 if '=' not in v:
                     raise ValueError('{} value separated with "=" was required'.format(v))
@@ -265,9 +294,9 @@ class AddRemoteCode(Device):
                     raise ValueError('{} value with key and value was required'.format(v))
                 try:
                     docref.get()
-                    update_time = self.client.collection(self.collectionRootPath).document(device_id).collection(remote_type).document(remotecode_action).update({kv: vv})
+                    update_time = docref.update({kv: vv})
                 except:
-                    update_time = self.client.collection(self.collectionRootPath).document(device_id).collection(remote_type).add({kv: vv}, remotecode_action)
+                    update_time = colref.add({kv: vv}, remotecode_action)
                 if update_time:
                     cpath = [self.collectionRootPath, device_id, remote_type, remotecode_action, remotecode_values]
                     cpath = [ str(i) for i in cpath ]
@@ -282,16 +311,17 @@ class AddRemoteCode(Device):
 
 class DelRemoteCode(Device):
     arguments = (
-        ('--device-id',     str,    True),
-        ('--remote-type',   str,    True),
-        ('--action',        str,    True),
+        ('--device-id',     { 'type': str,    'required': True }),
+        ('--remote-type',   { 'type': str,    'required': True }),
+        ('--action',        { 'type': str,    'required': True }),
     )
-    def run(self):
-        device_id = self.args.device_id
-        remote_type = self.args.remote_type
-        remotecode_action = self.args.action
+    def run(self, args=object):
+        device_id = args.device_id
+        remote_type = args.remote_type
+        remotecode_action = args.action
         try:
-            docref = self.client.collection(self.collectionRootPath).document(device_id).collection(remote_type).document(remotecode_action)
+            colref = self.getDeviceReference(device_id, True).collection(remote_type)
+            docref = colref.document(remotecode_action)
             if(not docref.get().exists):
                 return
             times = docref.delete()
@@ -309,13 +339,13 @@ class DelRemoteCode(Device):
 
 class GetUser(User):
     arguments = (
-        ('--user-id',       str,    False),
-        ('--full',          bool,    False),
+        ('--user-id',       { 'type': str,    'required': False }),
+        ('--full',          { 'type': bool,   'required': False }),
     )
-    def run(self):
-        user_id = self.args.user_id
-        show_full = self.args.full
-        for user in self.get(user_id):
+    def run(self, args=object):
+        user_id = args.user_id
+        show_full = args.full
+        for user in self._get(user_id):
             for u in user:
                 user_id = u['id']
                 del u['id']
@@ -329,14 +359,14 @@ class GetUser(User):
 
 class AddUser(User):
     arguments = (
-        ('--name',          str,    False),
+        ('--name',          { 'type': str,    'required': False }),
     )
-    def run(self):
-        user_name = self.args.name
+    def run(self, args=object):
+        user_name = args.name
         docdata = {}
         if user_name:
             docdata['name'] = user_name
-        docref = self.add(docdata)
+        docref = self._add(docdata)
         try:
             update_time = docref.update({ 'id': docref.id })
             if update_time is None:
@@ -349,22 +379,22 @@ class AddUser(User):
 
 class DelUser(User):
     arguments = (
-        ('--user-id',       str,    True),
+        ('--user-id',       { 'type': str,    'required': True }),
     )
-    def run(self):
-        user_id = self.args.user_id
-        self.delete(user_id)
+    def run(self, args=object):
+        user_id = args.user_id
+        self._del(user_id)
         return
 
 class GetGroup(Group):
     arguments = (
-        ('--group-id',      str,    False),
-        ('--full',          bool,   False),
+        ('--group-id',      { 'type': str,    'required': False }),
+        ('--full',          { 'type': bool,   'required': False }),
     )
-    def run(self):
-        group_id = self.args.group_id
-        show_full = self.args.full
-        for group in self.get(group_id):
+    def run(self, args=object):
+        group_id = args.group_id
+        show_full = args.full
+        for group in self._get(group_id):
             for g in group:
                 group_id = g['id']
                 del g['id']
@@ -378,40 +408,40 @@ class GetGroup(Group):
 
 class AddGroup(Group):
     arguments = (
-        ('--user-id',        list,    True),
+        ('--user-id',       { 'type': list,    'required': True }),
     )
-    def run(self):
-        user_ids = self.args.user_id
+    def run(self, args=object):
+        user_ids = args.user_id
         docdata = {}
         if user_ids:
             for user_id in user_ids:
-                userref = self.client.collection(User.collectionPath).document(user_id)
+                userref = self.getUserReference(user_id)
                 if userref is None:
                     continue
                 docdata[user_id] = userref
-        self.add(docdata)
+        self._add(docdata)
         return
 
 class DelGroup(Group):
     arguments = (
-        ('--group-id',      str,    True),
+        ('--group-id',      { 'type': str,    'required': True }),
     )
-    def run(self):
-        group_id = self.args.group_id
-        self.delete(group_id)
+    def run(self, args=object):
+        group_id = args.group_id
+        self._del(group_id)
         return
 
 class GetUserDevice(UserDevice):
     arguments = (
-        ('--user-device-id',    str,    False),
-        ('--user-id',           str,    False),
-        ('--full',              bool,    False),
+        ('--user-device-id',    { 'type': str,      'required': False }),
+        ('--user-id',           { 'type': str,      'required': False }),
+        ('--full',              { 'type': bool,     'required': False }),
     )
-    def run(self):
-        user_device_id = self.args.user_device_id
-        user_id = self.args.user_id
-        show_full = self.args.full
-        for udevice in self.get(user_device_id):
+    def run(self, args=object):
+        user_device_id = args.user_device_id
+        user_id = args.user_id
+        show_full = args.full
+        for udevice in self._get(user_device_id):
             for ud in udevice:
                 user_device_id = ud['id']
                 del ud['id']
@@ -429,28 +459,19 @@ class GetUserDevice(UserDevice):
 
 class AddUserDevice(UserDevice):
     arguments = (
-        ('--device-id',     str,    True),
-        ('--user-id',       str,    True),
-        ('--remote-id',     str,    True),
-        ('--name',          str,    False),
+        ('--device-id',     { 'type': str,    'required': True }),
+        ('--user-id',       { 'type': str,    'required': True }),
+        ('--remote-id',     { 'type': str,    'required': True }),
+        ('--name',          { 'type': str,    'required': False }),
     )
-    def run(self):
-        device_id = self.args.device_id
-        user_id = self.args.user_id
-        remote_id = self.args.remote_id
-        user_device_name = self.args.name
-        deviceReference = self.client.collection(Devices.collectionPath).document(device_id)
-        if deviceReference is None:
-            sys.stderr.write("{} cannot referenced, check Devices\n".format(deviceId))
-            sys.exit(1)
-        userReference  = self.client.collection(User.collectionPath).document(user_id)
-        if userReference is None:
-            sys.stderr.write("{} cannot referenced, check Groups\n".format(userId))
-            sys.exit(1)
-        remoteReference = self.client.collection(Remotes.collectionPath).document(remote_id)
-        if remoteReference is None:
-            sys.stderr.write("{} cannot referenced, check Remotes\n".format(remoteId))
-            sys.exit(1)
+    def run(self, args=object):
+        device_id = args.device_id
+        user_id = args.user_id
+        remote_id = args.remote_id
+        user_device_name = args.name
+        deviceReference = self.getDeviceReference(device_id, True)
+        userReference  = self.getUserReference(user_id, True)
+        remoteReference = self.getRemoteReference(remote_id, True)
         docdata = {
             'deviceId': device_id,
             'userId' : user_id,
@@ -461,29 +482,30 @@ class AddUserDevice(UserDevice):
         }
         if user_device_name:
             docdata['name'] = user_device_name
-        self.add(docdata)
+        self._add(docdata)
+        self.requestSync(user_id)
         return
 
 class DelUserDevice(UserDevice):
     arguments = (
-        ('--user-device-id',    str,    True),
+        ('--user-device-id',    { 'type': str,      'required': True }),
     )
-    def run(self):
-        user_device_id = self.args.user_device_id
-        self.delete(user_device_id)
+    def run(self, args=object):
+        user_device_id = args.user_device_id
+        self._del(user_device_id)
         return
 
 class GetGroupDevice(GroupDevice):
     arguments = (
-        ('--group-device-id',   str,    False),
-        ('--group-id',          str,    False),
-        ('--full',              bool,    False),
+        ('--group-device-id',   { 'type': str,      'required': False }),
+        ('--group-id',          { 'type': str,      'required': False }),
+        ('--full',              { 'type': bool,     'required': False }),
     )
-    def run(self):
-        group_device_id = self.args.group_device_id
-        group_id = self.args.group_id
-        show_full = self.args.full
-        for gdevice in self.get(group_device_id):
+    def run(self, args=object):
+        group_device_id = args.group_device_id
+        group_id = args.group_id
+        show_full = args.full
+        for gdevice in self._get(group_device_id):
             for gd in gdevice:
                 group_device_id = gd['id']
                 del gd['id']
@@ -501,48 +523,42 @@ class GetGroupDevice(GroupDevice):
 
 class AddGroupDevice(GroupDevice):
     arguments = (
-        ('--device-id',     str,    True),
-        ('--group-id',      str,    True),
-        ('--remote-id',     str,    True),
-        ('--name',          str,    False),
+        ('--device-id',     { 'type': str,    'required': True }),
+        ('--group-id',      { 'type': str,    'required': True }),
+        ('--remote-id',     { 'type': str,    'required': True }),
+        ('--name',          { 'type': str,    'required': False }),
     )
-    def run(self):
-        device_id = self.args.device_id
-        group_id = self.args.group_id
-        remote_id = self.args.remote_id
-        group_device_name = self.args.name
-        deviceReference = self.client.collection(Devices.collectionPath).document(device_id)
-        if deviceReference is None:
-            sys.stderr.write("{} cannot referenced, check Devices\n".format(deviceId))
-            sys.exit(1)
-        groupReference  = self.client.collection(Groups.collectionPath).document(group_id)
-        if groupReference is None:
-            sys.stderr.write("{} cannot referenced, check Groups\n".format(groupId))
-            sys.exit(1)
-        remoteReference = self.client.collection(Remotes.collectionPath).document(remote_id)
-        if remoteReference is None:
-            sys.stderr.write("{} cannot referenced, check Remotes\n".format(remoteId))
-            sys.exit(1)
+    def run(self, args=object):
+        device_id = args.device_id
+        group_id  = args.group_id
+        remote_id = args.remote_id
+        device_reference = self.getDeviceReference(device_id, True)
+        group_reference  = self.getGroupReference(group_id, True)
+        remote_reference = self.getRemoteReference(remote_id, True)
         docdata = {
             'deviceId': device_id,
             'groupId' : group_id,
             'remoteId': remote_id,
-            'deviceReference': deviceReference,
-            'groupReference' : groupReference,
-            'remoteReference': remoteReference
+            'deviceReference': device_reference,
+            'groupReference' : group_reference,
+            'remoteReference': remote_reference,
         }
+        group_device_name = args.name
         if group_device_name:
             docdata['name'] = group_device_name
-        self.add(docdata)
+        self._add(docdata)
+        for grp_docsnap in group_reference.get():
+            user_id = grp_docsnap.id
+            self.requestSync(user_id)
         return
 
 class DelGroupDevice(GroupDevice):
     arguments = (
-        ('--group-device-id',   str,    True),
+        ('--group-device-id',   { 'type': str,    'required': True }),
     )
-    def run(self):
-        group_device_id = self.args.group_device_id
-        self.delete(group_device_id)
+    def run(self, args=object):
+        group_device_id = args.group_device_id
+        self._del(group_device_id)
         return
 
 def get_client(serviceAccountKeyFile=None):
@@ -550,8 +566,23 @@ def get_client(serviceAccountKeyFile=None):
     if(serviceAccountKeyFile is None):
         serviceAccountKeyFile = default_serviceAccountKeyFile
     cred = credentials.Certificate(serviceAccountKeyFile)
+    cert_cred = cred.get_credential()
     app = firebase_admin.initialize_app(cred)
     return firestore.client(app)
+
+def get_apikey(apiKeyFile=None):
+    default_apiKeyFile = os.path.join(os.getcwd(), 'apikey.txt')
+    if(apiKeyFile is None):
+        apiKeyFile = default_apiKeyFile
+    apikey = None
+    apikey_length = 12
+    try:
+        with open(apiKeyFile, 'r') as fd:
+            apikey = fd.read(apikey_length)
+        return apikey
+    except:
+        (t, e) = sys.exc_info()[:2]
+        return None
 
 if __name__ == '__main__':
     mode_class = {
@@ -581,21 +612,30 @@ if __name__ == '__main__':
         'del_group_device': DelGroupDevice,
     }
 
+    client = get_client()
+    apikey = get_apikey()
     p = argparse.ArgumentParser()
     subp = p.add_subparsers(help='sub-command help', dest='mode')
     for k, v in mode_class.items():
         pp = subp.add_parser(k, help='see `{} -h`'.format(k))
         for vv in v.arguments:
-            argname, argtype, argrequire = vv
-            if argtype == list:
-                pp.add_argument(argname, required=argrequire, action='append')
-            elif argtype == bool:
-                pp.add_argument(argname, required=argrequire, action='store_true')
+            args, kwargs = vv
+            opt_type = None
+            if 'type' in kwargs:
+                opt_type = kwargs['type']
+                del kwargs['type']
+            if opt_type is None:
+                pp.add_argument(args, **kwargs)
+            elif opt_type is list:
+                pp.add_argument(args, **kwargs, action='append')
+            elif opt_type is bool:
+                pp.add_argument(args, **kwargs, action='store_true')
             else:
-                pp.add_argument(argname, type=argtype, required=argrequire)
-
-    args, opts = p.parse_known_args()
-    client = get_client()
-    c = mode_class[args.mode](client, args)
-    c.run()
+                pp.add_argument(args, **kwargs, type=opt_type)
+    args = p.parse_args()
+    if(not args.mode):
+        p.print_help(sys.stderr)
+        sys.exit(255)
+    c = mode_class[args.mode](client, apikey)
+    c.run(args)
     sys.exit(0)
