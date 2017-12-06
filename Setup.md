@@ -91,13 +91,16 @@ firebase deploy
 - **Database** に移動
 - **Cloud Firestore** をクリックして有効化
 
+## データの追加
+[Usage.md](Usage.md) を参照
+
 ## プロジェクトをGoogle Assitantに接続
 - Actions Consoleでプロジェクトを設定したアカウントと同一のアカウントでGoogle Homeにログインしているデバイスを用意
 - Google Homeの設定で **"スマートホーム"** をクリック
 - "+"をクリック
 - アプリの一覧からプロジェクトを探し、選択
 - Firebase Authorizationで設定したプロバイダをクリックしサインイン
-- Cloud Firestoreで設定したデバイスが追加されることを確認
+- "データの追加"で設定したデバイスが追加されることを確認
 
 ## 「OK,Google 照明をつけて」
 - Realtime Databaseの **commands** と **states** が変更される

@@ -275,13 +275,13 @@ class AddRemoteCode(Device):
     arguments = (
         ('--device-id',     { 'type': str,    'required': True }),
         ('--remote-type',   { 'type': str,    'required': True }),
-        ('--action',        { 'type': str,    'required': True }),
+        ('--action',        { 'type': str,    'required': True,	'choices': ('BrightnessAbsolute', 'GetCameraStream', 'ColorAbsolute', 'Dock', 'SetModes', 'OnOff', 'ActivateScene', 'StartStop', 'PauseUnpause', 'ThermostatTemperatureSetpoint', 'ThermostatTemperatureSetRange', 'ThermostatSetMode', 'SetToggles',) }),
         ('--values',        { 'type': list,   'required': True }),
     )
     def run(self, args):
         device_id = args.device_id
         remote_type = args.remote_type
-        remotecode_action = args.action
+        remotecode_action = 'action.devices.commands.' + args.action
         remotecode_values = args.values
         try:
             colref = self.getDeviceReference(device_id, True).collection(remote_type)
