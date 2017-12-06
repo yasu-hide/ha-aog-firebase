@@ -23,6 +23,20 @@ express.all('/report-state', app.reportstate);
 express.all('/token', oauth.token);
 express.all('/auth', oauth.auth);
 
+exports.addAccount = functions.auth.user().onCreate((event) => {
+    const user = event.data;
+    console.log('user added:', user.uid);
+    return admin.firestore().collection('users').doc(user.uid).set({
+        id: user.uid,
+        name: user.email,
+        createdAt: (new Date()).toJSON()
+    });
+});
+exports.delAccount = functions.auth.user().onDelete((event) => {
+    const user = event.data;
+    return admin.firestore().collection('users').doc(user.uid).delete();
+});
+
 function wrapCloudFunctionHandler(handler) {
     return (req, res) => {
         if(!req.url || !req.path) req.url = '/' + (req.url || '');
