@@ -51,15 +51,16 @@ admin.database().ref('commands').on('child_added', (snap) => {
             return;
         }
         const deviceName = docref.name;
-        return Promise.all([nowref, docref.remote, docref.device]).then(([nowstate, remoteDocsnap, deviceDocsnap]) => {
+        return Promise.all([nowref, docref.remote, docref.device, docref.ircode]).then(([nowstate, remoteDocsnap, deviceDocsnap, ircodeDocsnap]) => {
             if(DEBUG) {
                 console.log('deviceNickname=', deviceName);
                 console.log('deviceCommand=', deviceCommand);
                 console.log('device=', deviceDocsnap.id, deviceDocsnap.data());
                 console.log('remote=', remoteDocsnap.id, remoteDocsnap.data());
+                console.log('ircode=', ircodeDocsnap.id, ircodeDocsnap.data());
             }
             const remoteData = remoteDocsnap.data();
-            const remoteCommand = deviceDocsnap.ref.collection(remoteData.type);
+            const remoteCommand = ircodeDocsnap.ref.collection(remoteData.type);
             const deviceCommandPromises = [];
             deviceCommand.forEach((cmd) => {
                 const cmdkey = convert_actions(nowstate, cmd.command, cmd.params);

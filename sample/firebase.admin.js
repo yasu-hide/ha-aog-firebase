@@ -6,7 +6,7 @@ admin.initializeApp({
 });
 
 const getFromFirestore = (collection, doc) => {
-    return admin.firestore().collection(collection).doc(doc).get();
+    return admin.firestore().collection(collection).doc(doc);
 };
 const getFromDatabase = (refkey, pkey) => {
     return admin.database().ref(refkey + '/' + pkey).once('value');
@@ -55,45 +55,56 @@ Model.getUserDevices = (userId) => {
     return getPersonalDevices('user_devices', userId);
 };
 Model.getDevice = (deviceId) => {
-    return getFromFirestore('devices', deviceId).then((docsnap) => {
+    return getFromFirestore('devices', deviceId).get().then((docsnap) => {
         if(docsnap && docsnap.exists) {
             return {
                 id: docsnap.id,
                 data: docsnap.data()
-            }
+            };
         }
         return {};
     });
 };
 Model.getRemote = (remoteId) => {
-    return getFromFirestore('remotes', remoteId).then((docsnap) => {
+    return getFromFirestore('remotes', remoteId).get().then((docsnap) => {
         if(docsnap && docsnap.exists) {
             return {
                 id: docsnap.id,
                 data: docsnap.data()
-            }
+            };
         }
         return {};
     });
 };
 Model.getUser = (userId) => {
-    return getFromFirestore('users', userId).then((docsnap) => {
+    return getFromFirestore('users', userId).get().then((docsnap) => {
         if(docsnap && docsnap.exists) {
             return {
                 id: docsnap.id,
                 data: docsnap.data()
-            }
+            };
         }
         return {};
     });
 };
 Model.getGroup = (groupId) => {
-    return getFromFirestore('groups', groupId).then((docsnap) => {
+    return getFromFirestore('groups', groupId).get().then((docsnap) => {
         if(docsnap && docsnap.exists) {
             return {
                 id: docsnap.id,
                 data: docsnap.data()
-            }
+            };
+        }
+        return {};
+    });
+};
+Model.getIrcode = (ircodeId) => {
+    return getFromFirestore('ircodes', ircodeId).get().then((docsnap) => {
+        if(docsnap && docsnap.exists) {
+            return {
+                id: docsnap.id,
+                data: docsnap.data()
+            };
         }
         return {};
     });
@@ -135,8 +146,8 @@ Model.getDeviceByPersonalDeviceId = (personalDeviceId) => {
         console.error('personalDeviceId is required');
         return Promise.reject('personalDeviceId is required');
     }
-    const groupDocsnap = admin.firestore().collection('group_devices').doc(personalDeviceId).get();
-    const userDocsnap = admin.firestore().collection('user_devices').doc(personalDeviceId).get();
+    const groupDocsnap = getFromFirestore('group_devices', personalDeviceId).get();
+    const userDocsnap = getFromFirestore('user_devices', personalDeviceId).get();
     return Promise.all([groupDocsnap, userDocsnap]).then(([groupDevice, userDevice]) => {
         const groupDeviceExist = (groupDevice && groupDevice.exists);
         const userDeviceExist = (userDevice && userDevice.exists);
@@ -150,11 +161,14 @@ Model.getDeviceByPersonalDeviceId = (personalDeviceId) => {
             return userDevice.data();
         }
     }).then((deviceData) => {
-        let deviceReference, remoteReference;
+        let deviceReference, remoteReference, ircodeReference;
         if(!deviceData.deviceId && !deviceData.deviceReference) {
             throw new Error('data consistency error');
         }
         if(!deviceData.remoteId && !deviceData.remoteReference) {
+            throw new Error('data consistency error');
+        }
+        if(!deviceData.idcodeId && !deviceData.ircodeReference) {
             throw new Error('data consistency error');
         }
         if(deviceData.deviceReference) {
@@ -167,10 +181,16 @@ Model.getDeviceByPersonalDeviceId = (personalDeviceId) => {
         } else {
             remoteReference = Model.getRemote(deviceData.remoteId);
         }
+        if(deviceData.ircodeReference) {
+            ircodeReference = deviceData.ircodeReference.get();
+        } else {
+            ircodeReference = Model.getIrcode(deviceData.ircodeId);
+        }
         return {
             name: deviceData.name,
             device: deviceReference,
-            remote: remoteReference
+            remote: remoteReference,
+            ircode: ircodeReference
         };
     }).catch(console.error);
 };

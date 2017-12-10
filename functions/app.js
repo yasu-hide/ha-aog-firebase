@@ -8,7 +8,7 @@ const requestSyncEndpoint = 'https://homegraph.googleapis.com/v1/devices:request
 const reportStateEndpoint = 'https://homegraph.googleapis.com/v1/devices?key=';
 
 const getFromFirestore = (collection, doc) => {
-    return admin.firestore().collection(collection).doc(doc).get();
+    return admin.firestore().collection(collection).doc(doc);
 };
 const getFromDatabase = (refkey, pkey) => {
     return admin.database().ref(refkey + '/' + pkey).once('value');
@@ -56,7 +56,7 @@ Model.getUserDevices = (userId) => {
     return getPersonalDevices('user_devices', userId);
 };
 Model.getDevice = (deviceId) => {
-    return getFromFirestore('devices', deviceId).then((docsnap) => {
+    return getFromFirestore('devices', deviceId).get().then((docsnap) => {
         if(docsnap && docsnap.exists) {
             return {
                 id: docsnap.id,
@@ -67,7 +67,7 @@ Model.getDevice = (deviceId) => {
     });
 };
 Model.getRemote = (remoteId) => {
-    return getFromFirestore('remotes', remoteId).then((docsnap) => {
+    return getFromFirestore('remotes', remoteId).get().then((docsnap) => {
         if(docsnap && docsnap.exists) {
             return {
                 id: docsnap.id,
@@ -78,7 +78,7 @@ Model.getRemote = (remoteId) => {
     });
 };
 Model.getUser = (userId) => {
-    return getFromFirestore('users', userId).then((docsnap) => {
+    return getFromFirestore('users', userId).get().then((docsnap) => {
         if(docsnap && docsnap.exists) {
             return {
                 id: docsnap.id,
@@ -89,7 +89,7 @@ Model.getUser = (userId) => {
     });
 };
 Model.getGroup = (groupId) => {
-    return getFromFirestore('groups', groupId).then((docsnap) => {
+    return getFromFirestore('groups', groupId).get().then((docsnap) => {
         if(docsnap && docsnap.exists) {
             return {
                 id: docsnap.id,
