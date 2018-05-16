@@ -138,7 +138,7 @@ class AddDevice(Device):
         device_manufacturer = args.manufacturer
         device_model = args.model
         device_traits = [ 'action.devices.traits.' + t for t in args.traits ]
-        device_type = 'action.devices.type.' + args.type
+        device_type = 'action.devices.types.' + args.type
         device_report_state = args.report_state
         device_name = args.name
         docdata = {
