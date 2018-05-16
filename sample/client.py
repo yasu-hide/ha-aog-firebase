@@ -75,7 +75,7 @@ class BaseCollection(object):
             sys.exit(1)
         return remoteReference
     def getUserReference(self, user_id, checkExists=False):
-        userReference = self._get_colref(User.collectionPath).document(user_id)
+        userReference = self._get_colref(User.collectionRootPath).document(user_id)
         if checkExists == True and userReference is None:
             sys.stderr.write("{} cannot referenced, check Groups\n".format(userId))
             sys.exit(1)
