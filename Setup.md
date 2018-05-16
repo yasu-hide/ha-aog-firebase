@@ -18,18 +18,18 @@ n
 ```
 firebase init
 ```
-先ほど作ったプロジェクトを選択したら、あとは全部Enter
+チェックを付けてエンター、先ほど作ったプロジェクトを選択したら、あとは全部Enter
 
 ## "Actions on Google" プロジェクトを作成
 - [Actions Console](https://console.actions.google.com/)に移動
 - **"Add/import project"** をクリックして新しいプロジェクトを作成
-- プロジェクト名をメモる
+- プロジェクトＩＤをメモる
 
 ## "Firebase Authentication" の設定
 - FirebaseプロジェクトConsoleに移動
 - DEVELOPの **Authentication** に移動
 - Authenticationのタブから **ログイン方法**に移動
-- 承認済みドメインに`us-central1-<プロジェクト名>.cloudfunctions.net`を追加
+- 承認済みドメインに`us-central1-<プロジェクトＩＤ>.cloudfunctions.net`を追加
 - **ログインプロバイダ** から有効にしたいプロバイダをクリック
 - 右上の **有効にする** スライダをクリックし有効化
 - プロバイダに応じた認証情報を入力
@@ -39,7 +39,7 @@ firebase init
 - 認証情報を作成から **OAuthクライアントID** を選択
 - **ウェブアプリケーション** をチェック
 - 名前を入力
-- 承認済みのリダイレクトURLに`https://oauth-redirect.googleusercontent.com/r/<プロジェクト名>`を入力
+- 承認済みのリダイレクトURLに`https://<プロジェクトID>.firebaseapp.com/__/auth/handler`を入力
 - 作成をクリック
 - 表示される **クライアントID** と **クライアントシークレット** をメモ
 - FirebaseのGoogleプロバイダ設定画面に戻る
@@ -55,7 +55,11 @@ firebase init
 ```
 cd functions && npm install
 ```
-- OAuth資格情報を設定
+- bowerでfirebaseuiを取得（bowerがなければnpmでインストールしてから）
+```
+bower install firebaseui --save
+```
+- OAuth資格情報を生成し設定
     - `ClientId`を作成し、`firebase functions:config:set app.id=<ClientId>`を設定
     - `ClientSecret`を作成し、`firebase functions:config:set app.key=<ClientSecret>`を設定
 
@@ -68,7 +72,7 @@ firebase deploy
 - Actionsプロジェクトコンソールに移動
 - "Use Actions SDK"をクリック
 - **"actions.json"** のURLをプロジェクト名に置き換え
-    - `https://us-central1-<プロジェクト名>.cloudfunctions.net/ha` -> `https://us-central1-testapp-6bag.cloudfunctions.net/ha`
+    - `https://us-central1-<プロジェクトID>.cloudfunctions.net/ha` -> `https://us-central1-testapp-6bag.cloudfunctions.net/ha`
 - プロジェクト設定を更新するため、`gactions`コマンドに **"actions.json"** を指定して実行
     - [gactions CLIをダウンロード](https://developers.google.com/actions/tools/gactions-cli)
     - `gactions update --project <プロジェクト名> --action_package actions.json` を実行
@@ -80,8 +84,8 @@ firebase deploy
     - Client information
         - Client ID: **ClientId**と同じ
         - Client secret: **ClientSecret**と同じ
-        - Authorization URL: `https://us-central1-<プロジェクト名>.cloudfunctions.net/ha/auth`
-        - Token URL: `https://us-central1-<プロジェクト名>.cloudfunctions.net/ha/token`
+        - Authorization URL: `https://us-central1-<プロジェクトID>.cloudfunctions.net/ha/auth`
+        - Token URL: `https://us-central1-<プロジェクトID>.cloudfunctions.net/ha/token`
 - "Save"をクリック
 - "TEST DRAFT"をクリック
 
@@ -92,6 +96,8 @@ firebase deploy
 - **Cloud Firestore** をクリックして有効化
 
 ## データの追加
+- firebase >プロジェクトの設定 > サービスアカウント > Firebase Admin SDK > Python > 新らしい秘密鍵の生成
+    - ./sample/serviceAccountKey.json を書き換え
 [Usage.md](Usage.md) を参照
 
 ## プロジェクトをGoogle Assitantに接続

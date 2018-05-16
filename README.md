@@ -19,7 +19,7 @@ IFTTTでGoogle Assistant連携をセットアップすると、単純な言葉�
 不具合や設定不備により、悪意のあるユーザーに個人の情報が侵害される可能性があります。
 
 ## 前提
-- デプロイ元PCにnode.jsとnpm
+- デプロイ元PCにnode.jsとnpm/python3.5以上
 - Googleアカウント
 - Google Assistant対応端末 (Android, Google Home)
 

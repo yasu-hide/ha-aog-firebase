@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>login</title>
+    <!-- FirabaseサイトのProjectOverview「ウェブアプリにFirebaseを追加」から取得できるスニペットをコピペする -->
     <script src="https://www.gstatic.com/firebasejs/4.6.2/firebase.js"></script>
     <script type="text/javascript">
       firebase.initializeApp({
@@ -13,17 +14,20 @@
         storageBucket: "<%=config.storageBucket%>",
       });
     </script>
+    <!-- ここまで  -->
     <script src="https://cdn.firebase.com/libs/firebaseui/2.5.1/firebaseui.js"></script>
     <script src="https://www.gstatic.com/firebasejs/ui/2.5.1/firebase-ui-auth__ja.js"></script>
     <link type="text/css" rel="stylesheet" href="https://cdn.firebase.com/libs/firebaseui/2.5.1/firebaseui.css" />
     <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/2.5.1/firebase-ui-auth.css" />
+    <script src="bower_components/firebaseui/dist/firebaseui.js"></script>
+    <link type="text/css" rel="stylesheet" href="bower_components/firebaseui/dist/firebaseui.css" />
     <script type="text/javascript">
       const ui = new firebaseui.auth.AuthUI(firebase.auth());
       const redirect_uri = '<%=redirect_uri%>?state=<%=state%>'
       ui.start('#firebaseui-auth-container', {
         callbacks: {
           signInSuccess: (currentUser, credential, redirectUrl) => {
-            currentUser.getToken(true).then((idToken) => {
+            currentUser.getIdToken(true).then(function(idToken) {
               const xhr = new XMLHttpRequest();
               xhr.open('POST', window.location, true);
               xhr.setRequestHeader('Authorization', 'Bearer ' + idToken);
