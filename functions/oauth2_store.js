@@ -3,7 +3,7 @@ const functions = require('firebase-functions');
 const admin = require("firebase-admin");
 const app_clientId = functions.config().app.id;
 const app_clientSecret = functions.config().app.key;
-const app_projectId = functions.config().firebase.projectId;
+const app_projectId = JSON.parse(process.env.FIREBASE_CONFIG).projectId;
 const app_redirectUris = [
     'https://oauth-redirect.googleusercontent.com/r/' + app_projectId,
     'https://' + app_projectId + '.firebaseapp.com/__/auth/handler'
