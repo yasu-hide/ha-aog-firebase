@@ -9,12 +9,17 @@
         "body-parser": "latest",
         "cookie-parser": "latest",
         "ejs": "latest",
+        "eslint": "^4.19.1",
         "express": "latest",
         "firebase-admin": "latest",
         "firebase-functions": "latest",
+        "firebaseui": "^3.0.0",
         "node-fetch": "latest",
         "oauth2-server": "latest",
         "morgan": "latest",
         "util": "latest"
+    },
+    "scripts": {
+        "lint": "eslint"
     }
 }
