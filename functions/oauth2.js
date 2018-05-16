@@ -4,6 +4,7 @@ const functions = require('firebase-functions');
 const admin = require("firebase-admin");
 const OAuth2Server = require("oauth2-server");
 const AuthStore = require("./oauth2_store");
+const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
 const AuthModel = {
     getAccessToken : (accessToken) => {
         return AuthStore.getAccessToken(accessToken).then((token) => {
@@ -144,7 +145,7 @@ exports.auth = (req, res, next) => {
         });
     }
     return res.render('login', {
-        config: functions.config().firebase,
+        config: firebaseConfig,
         redirect_uri: redirect_uri,
         state: state
     });
