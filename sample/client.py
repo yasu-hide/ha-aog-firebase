@@ -249,6 +249,12 @@ class BaseCollection(object):
             sys.stderr.write("{} cannot referenced, check Groups\n".format(userId))
             sys.exit(1)
         return userReference
+    def getIrcodeReference(self, ircode_id, checkExists=False):
+        ircodeReference = self._get_colref(Ircode.collectionRootPath).document(ircode_id)
+        if checkExists == True and ircodeReference is None:
+            sys.stderr.write("{} cannot referenced, check Ircodes\n".format(ircode_id))
+            sys.exit(1)
+        return ircodeReference
     def requestSync(self, agent_user_id):
         if not self.apikey:
             return
@@ -270,6 +276,8 @@ class UserDevice(BaseCollection):
     collectionRootPath = 'user_devices'
 class GroupDevice(BaseCollection):
     collectionRootPath = 'group_devices'
+class Ircode(BaseCollection):
+    collectionRootPath = 'ircodes'
 
 class GetDevice(Device):
     arguments = (
@@ -440,20 +448,22 @@ class GetRemoteCode(Device):
                 pprint.pprint({action: remote})
         return
 
-class AddRemoteCode(Device):
+class AddRemoteCode(Ircode):
     arguments = (
-        ('--device-id',     { 'type': str,    'required': True }),
+        ('--ircode-id',     { 'type': str,    'required': False }),
         ('--remote-type',   { 'type': str,    'required': True }),
         ('--action',        { 'type': str,    'required': True,	'choices': sorted(set(x for v in DEVICE_TRAITS.values() for x in v['commands'])) }),
         ('--values',        { 'type': list,   'required': True }),
     )
     def run(self, args):
-        device_id = args.device_id
+        ircode_id = args.ircode_id
         remote_type = args.remote_type
         remotecode_action = DEVICE_COMMANDS_PREFIX + args.action
         remotecode_values = args.values
         try:
-            colref = self.getDeviceReference(device_id, True).collection(remote_type)
+            if  not ircode_id or not self.getIrcodeReference(ircode_id,False):
+                ircode_id = self._add({}).id
+            colref = self.getIrcodeReference(ircode_id, True).collection(remote_type)
             docref = colref.document(remotecode_action)
             for v in remotecode_values:
                 if '=' not in v:
@@ -467,7 +477,7 @@ class AddRemoteCode(Device):
                 except:
                     update_time = colref.add({kv: vv}, remotecode_action)
                 if update_time:
-                    cpath = [self.collectionRootPath, device_id, remote_type, remotecode_action, remotecode_values]
+                    cpath = [self.collectionRootPath, ircode_id, remote_type, remotecode_action, remotecode_values]
                     cpath = [ str(i) for i in cpath ]
                     sys.stdout.write("{} was added\n".format('/'.join(cpath)))
                 else:
@@ -478,23 +488,23 @@ class AddRemoteCode(Device):
             sys.exit(1)
         return
 
-class DelRemoteCode(Device):
+class DelRemoteCode(Ircode):
     arguments = (
-        ('--device-id',     { 'type': str,    'required': True }),
+        ('--ircode-id',     { 'type': str,    'required': True }),
         ('--remote-type',   { 'type': str,    'required': True }),
         ('--action',        { 'type': str,    'required': True }),
     )
     def run(self, args=object):
-        device_id = args.device_id
+        ircode_id = args.ircode_id
         remote_type = args.remote_type
         remotecode_action = args.action
         try:
-            colref = self.getDeviceReference(device_id, True).collection(remote_type)
+            colref = self.getIrcodeReference(ircode_id, True).collection(remote_type)
             docref = colref.document(remotecode_action)
             if(not docref.get().exists):
                 return
             times = docref.delete()
-            cpath = [self.collectionRootPath, device_id, remote_type, remotecode_action]
+            cpath = [self.collectionRootPath, ircode_id, remote_type, remotecode_action]
             cpath = [ str(i) for i in cpath ]
             if times:
                 sys.stdout.write("{} was deleted\n".format('/'.join(cpath)))
