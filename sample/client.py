@@ -370,10 +370,7 @@ class AddDeviceAttribute(Device):
         attr_name = args.attr_name
         attr_data = args.attr_data
         attr_data = json.loads(attr_data)
-        docdata = {
-            'attributes' : { attr_name: attr_data }
-        }
-        update_time = self.getDeviceReference(device_id).update(docdata)
+        update_time = self.getDeviceReference(device_id).update({ 'attributes.' + attr_name: attr_data})
         return
 
 class DelDeviceAttribute(Device):
