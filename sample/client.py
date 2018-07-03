@@ -1,10 +1,179 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import os, sys, types
 import argparse
 import firebase_admin
 from firebase_admin import credentials,firestore
 import pprint
 import json, urllib.request
+
+## List Device Traits, see https://developers.google.com/actions/smarthome/traits/
+DEVICE_TRAITS_PREFIX = 'action.devices.traits.'
+DEVICE_COMMANDS_PREFIX = 'action.devices.commands.'
+DEVICE_TRAITS = {
+    'Brightness': {
+        'description': '''Absolute brightness setting is in a normalized range from 0 to 100 (individual lights may not support every point in the range based on their LED configuration).''',
+        'language': [ 'en', 'de', 'fr', 'ja', 'it' ],
+        'commands': [
+            'BrightnessAbsolute'
+        ]
+    },
+    'CameraStream': {
+        'description': '''This trait belongs to devices which have the capability to stream video feeds to third party screens, Chromecast-connected screens or an Android phone. By and large, these are currently security cameras or baby cameras. But this would also apply to more complex devices which have a camera on them (for example, video-conferencing robotics/devices or a vacuum robot with a camera on it).''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': [
+            'GetCameraStream'
+        ]
+    },
+    'ColorSpectrum': {
+        'description': '''This applies to "full" color bulbs that take RGB color ranges. Lights may have any combination of ColorSpectrum and ColorTemperature; accent lights and LED strips may just have Spectrum, whereas some reading bulbs just have Temperature. Basic bulbs, or dumb lights on smart plugs, have neither.''',
+        'language': [ 'en', 'de', 'fr', 'ja', 'it' ],
+        'commands': [
+            'ColorAbsolute'
+        ]
+    },
+    'ColorTemperature': {
+        'description': '''This applies to "warmth" bulbs that take a color point in Kelvin. This is generally a separate modality from ColorSpectrum, and there may be white points available via Temperature that cannot be reached by Spectrum. Based on available traits, Google may pick the appropriate mode to use based on request and light type (for example, Make the living room lights white might send Temperature commands to some bulbs and Spectrum commands to LED strips).''',
+        'language': [ 'en', 'de', 'fr', 'ja', 'it' ],
+        'commands': [
+            'ColorAbsolute'
+        ]
+    },
+    'Dock': {
+        'description': '''This trait is designed for self-mobile devices that can be commanded to return for charging.''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': [
+            'Dock'
+        ]
+    },
+    'FanSpeed': {
+        'description': '''This trait belongs to devices that support setting the speed of a fan (that is, blowing air from the device at various levels, which may be part of an air conditioning or heating unit, or in a car), with settings such as low, medium, and high.''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': [
+            'SetFanSpeed',
+            'Reverse'
+        ]
+    },
+    'Locator': {
+        'description': '''This trait is used for devices that can be "found". This includes phones, robots (including vacuums and mowers), drones, and tag-specific products that attach to other devices.''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': [
+            'Locate'
+        ]
+    },
+    'Modes': {
+        'description': '''This trait belongs to any devices with an arbitrary number of "n-way" modes in which the modes and settings for each mode are arbitrary and unique to each device or device type. Each mode has multiple possible settings, but only one can be selected at a time; a dryer cannot be in "delicate," "normal," and "heavy duty" mode simultaneously. A setting that simply can be turned on or off belongs in the Toggles trait.''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': [
+            'SetModes'
+        ]
+    },
+    'OnOff': {
+        'description': '''The basic on and off functionality for any device that has binary on and off, including plugs and switches as well as many future devices.''',
+        'language': [ 'en', 'de', 'fr', 'ja', 'it' ],
+        'commands': [
+            'OnOff'
+        ]
+    },
+    'RunCycle': {
+        'description': '''This trait represents any device that has an ongoing duration for its operation which can be queried. This includes, but is not limited to, devices that operate cyclically, such as washing machines, dryers, and dishwashers.''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': []
+    },
+    'Scene': {
+        'description': '''In the case of scenes, the type maps 1': {1 to the trait, as scenes don't combine with other traits to form composite devices.''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': [
+            'ActivateScene'
+        ]
+    },
+    'StartStop': {
+        'description': '''Starting and stopping a device serves a similar function to turning it on and off. Devices that inherit this trait function differently when turned on and when started. Unlike devices that simply have an on and off state, some devices that can start and stop are also able to pause while performing operation.''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': [
+            'StartStop',
+            'PauseUnpause'
+        ]
+    },
+    'TemperatureControl': {
+        'description': '''Trait for devices (other than thermostats) that support controlling temperature, either within or around the device. This includes devices such as ovens and refrigerators.''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': [
+            'SetTemperature'
+        ]
+    },
+    'TemperatureSetting': {
+        'description': '''This trait covers handling both temperature point and modes.''',
+        'language': [ 'en', 'de', 'fr', 'ja', 'it' ],
+        'commands': [
+            'ThermostatTemperatureSetpoint',
+            'ThermostatTemperatureSetRange',
+            'ThermostatSetMode'
+        ]
+    },
+    'Toggles': {
+        'description': '''This trait belongs to any devices with settings that can only exist in one of two states. These settings can represent a physical button with an on/off or active/inactive state, a checkbox in HTML, or any other sort of specifically enabled/disabled element.''',
+        'language': [ 'en', 'de', 'fr', 'ja' ],
+        'commands': [
+            'SetToggles'
+        ]
+    },
+}
+
+# List Device Types, see https://developers.google.com/actions/smarthome/guides/
+DEVICE_TYPES_PREFIX = 'action.devices.types.'
+DEVICE_TYPES = {
+    'AC_UNIT': {
+        'description': '''Air conditioning units are similar to thermostats, but do not support heating and may not support setting temperature targets, but rather rely on modes, toggles, and fan speed settings (for example, high and low).'''
+    },
+    'AIRPURIFIER': {
+        'description': '''Air purifiers can be turned on and off and may support adjusting fan speed levels. Some may also have various toggles or modes, and each mode has its own related settings. These are specific to the air purifier and are interpreted in a generalized form.'''
+    },
+    'CAMERA': {
+        'description': '''Cameras are complex and features will vary significantly between vendors. Over time, cameras will acquire many traits and attributes describing specific capabilities, many of which may interact with the video/audio stream in special ways, such as sending a stream to another device, identifying what's in the stream, replaying feeds, etc. As such, cameras also interact with other devices - especially screens and other media targets.'''
+    },
+    'COFFEE_MAKER': {
+        'description': '''Interactions with coffee makers may include turning them on and off, adjusting the target temperature, and adjusting various mode settings.'''
+    },
+    'DISHWASHER': {
+        'description': '''Dishwashers can have start and stop functionality independent from being on or off (some washers have separate power buttons, and some do not). Some can be paused and resumed while washing. Dishwashers also have various modes and each mode has its own related settings. These are specific to the dishwasher and are interpreted in a generalized form.'''
+    },
+    'DRYER': {
+        'description': '''Dryers have start and stop functionality independent from being on or off. Some can be paused and resumed while drying. Dryers also have various modes and each mode has its own related settings. These are specific to the dryer and are interpreted in a generalized form.'''
+    },
+    'KETTLE': {
+        'description': '''Kettles are devices that boil water. Interactions with kettles may include turning them on and off, adjusting the target temperature, and perhaps adjusting various mode settings.'''
+    },
+    'LIGHT': {
+        'description': '''This type indicates that the device gets the light bulb icon and some light synonyms/aliases.'''
+    },
+    'OUTLET': {
+        'description': '''This type indicates that the device gets the plug icon and some outlet synonyms/aliases.'''
+    },
+    'OVEN': {
+        'description': '''Interaction with ovens involves the ability to bake or broil at certain temperatures. The physical temperature inside the oven differs as the oven is heating, so this may also be monitored. The oven has a cook time that limits the duration of baking.'''
+    },
+    'REFRIGERATOR': {
+        'description': '''This type indicates that the device gets the appropriate icon and some refrigerator synonyms/aliases. Refrigerators are temperature-managing devices which may have various modes/settings.'''
+    },
+    'SCENE': {
+        'description': '''Scenes defined here are partner scenes, implemented as virtual devices and activated by name.'''
+    },
+    'SPRINKLER': {
+        'description': '''Sprinklers can start and stop (or turn on and off). In the future, they may support timers and/or schedules.'''
+    },
+    'SWITCH': {
+        'description': '''This type indicates that the device gets the switch icon and some switch synonyms/aliases.'''
+    },
+    'THERMOSTAT': {
+        'description': '''Thermostats are temperature-managing devices, with set points and modes. This separates them from heaters and AC units which may only have modes and settings (for example, high/low) vs a temperature target.'''
+    },
+    'VACUUM': {
+        'description': '''Vacuums can have binary modes and settings (for example, on/off and start/pause) as well as a mode to schedule cleaning sessions and a mode to charge themselves. Partners can construct their vacuum cleaner specifics using a combination of these standard modes, as well as the Dock trait to support returning for charge.'''
+    },
+    'WASHER': {
+        'description': '''Washers can have start and stop functionality independent from being on or off (some washers have separate power buttons, and some do not). Some can be paused and resumed while washing. Washers also have various modes and each mode has its own related settings. These are specific to the washer and are interpreted in a generalized form.'''
+    }
+}
 
 class BaseCollection(object):
     baseUrl = 'https://homegraph.googleapis.com'
@@ -129,16 +298,16 @@ class AddDevice(Device):
     arguments = (
         ('--manufacturer',  { 'type': str,    'required': True }),
         ('--model',         { 'type': str,    'required': True }),
-        ('--traits',        { 'type': list,   'required': True, 'choices': ( 'Brightness', 'CameraStream', 'ColorSpectrum', 'ColorTemperature', 'Dock', 'Modes', 'OnOff', 'RunCycle', 'Scene', 'StartStop', 'TemperatureSetting', 'Toggles', ) }),
-        ('--type',          { 'type': str,    'required': True, 'choices': ( 'CAMERA', 'DISHWASHER', 'DRYER', 'LIGHT', 'OUTLET', 'SCENE', 'SWITCH', 'THERMOSTAT', 'VACUUM', 'WASHER', ) }),
+        ('--traits',        { 'type': list,   'required': True, 'choices': DEVICE_TRAITS.keys() }),
+        ('--type',          { 'type': str,    'required': True, 'choices': DEVICE_TYPES.keys() }),
         ('--report-state',  { 'type': bool,   'required': False }),
         ('--name',          { 'type': str,    'required': False }),
     )
     def run(self, args=object):
         device_manufacturer = args.manufacturer
         device_model = args.model
-        device_traits = [ 'action.devices.traits.' + t for t in args.traits ]
-        device_type = 'action.devices.types.' + args.type
+        device_traits = [ DEVICE_TRAITS_PREFIX + t for t in args.traits ]
+        device_type = DEVICE_TYPES_PREFIX + args.type
         device_report_state = args.report_state
         device_name = args.name
         docdata = {
@@ -275,13 +444,13 @@ class AddRemoteCode(Device):
     arguments = (
         ('--device-id',     { 'type': str,    'required': True }),
         ('--remote-type',   { 'type': str,    'required': True }),
-        ('--action',        { 'type': str,    'required': True,	'choices': ('BrightnessAbsolute', 'GetCameraStream', 'ColorAbsolute', 'Dock', 'SetModes', 'OnOff', 'ActivateScene', 'StartStop', 'PauseUnpause', 'ThermostatTemperatureSetpoint', 'ThermostatTemperatureSetRange', 'ThermostatSetMode', 'SetToggles',) }),
+        ('--action',        { 'type': str,    'required': True,	'choices': sorted(set(x for v in DEVICE_TRAITS.values() for x in v['commands'])) }),
         ('--values',        { 'type': list,   'required': True }),
     )
     def run(self, args):
         device_id = args.device_id
         remote_type = args.remote_type
-        remotecode_action = 'action.devices.commands.' + args.action
+        remotecode_action = DEVICE_COMMANDS_PREFIX + args.action
         remotecode_values = args.values
         try:
             colref = self.getDeviceReference(device_id, True).collection(remote_type)
