@@ -9,7 +9,7 @@
         "body-parser": "latest",
         "cookie-parser": "latest",
         "ejs": "latest",
-        "eslint": "^4.19.1",
+        "eslint": "^7.0.0",
         "express": "latest",
         "firebase-admin": "latest",
         "firebase-functions": "latest",
