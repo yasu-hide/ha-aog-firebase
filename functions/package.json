@@ -1,25 +1,29 @@
 {
-    "name": "ha-aog-firestore",
-    "description": "ha-aog-firestore",
-    "version": "0.0.1",
-    "main": "index.js",
-    "private": true,
-    "license": "MIT",
-    "dependencies": {
-        "body-parser": "latest",
-        "cookie-parser": "latest",
-        "ejs": "latest",
-        "eslint": "^7.0.0",
-        "express": "latest",
-        "firebase-admin": "latest",
-        "firebase-functions": "latest",
-        "firebaseui": "^3.0.0",
-        "node-fetch": "latest",
-        "oauth2-server": "latest",
-        "morgan": "latest",
-        "util": "latest"
-    },
-    "scripts": {
-        "lint": "eslint"
-    }
+  "name": "ha-aog-firestore",
+  "description": "ha-aog-firestore",
+  "version": "0.0.1",
+  "main": "index.js",
+  "private": true,
+  "license": "MIT",
+  "dependencies": {
+    "body-parser": "latest",
+    "cookie-parser": "latest",
+    "ejs": "latest",
+    "eslint": "^7.0.0",
+    "express": "latest",
+    "firebase-admin": "latest",
+    "firebase-functions": "latest",
+    "firebaseui": "^3.0.0",
+    "node-fetch": "latest",
+    "oauth2-server": "latest",
+    "morgan": "latest",
+    "util": "latest",
+    "@snyk/protect": "latest"
+  },
+  "scripts": {
+    "lint": "eslint",
+    "prepublish": "npm run snyk-protect",
+    "snyk-protect": "snyk-protect"
+  },
+  "snyk": true
 }
