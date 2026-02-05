@@ -8,6 +8,6 @@
     "dependencies": {
         "broadlinkjs-rm": "latest",
         "firebase": "latest",
-        "firebase-admin": "^12.0.0"
+        "firebase-admin": "^13.0.0"
     }
 }
