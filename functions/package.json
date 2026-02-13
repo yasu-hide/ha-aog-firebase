@@ -6,19 +6,20 @@
   "private": true,
   "license": "MIT",
   "dependencies": {
+    "@snyk/protect": "latest",
     "body-parser": "latest",
     "cookie-parser": "latest",
     "ejs": "latest",
     "eslint": "^9.0.0",
     "express": "latest",
+    "express-rate-limit": "^8.2.1",
     "firebase-admin": "latest",
     "firebase-functions": "latest",
     "firebaseui": "^3.0.0",
+    "morgan": "latest",
     "node-fetch": "latest",
     "oauth2-server": "latest",
-    "morgan": "latest",
-    "util": "latest",
-    "@snyk/protect": "latest"
+    "util": "latest"
   },
   "scripts": {
     "lint": "eslint",
