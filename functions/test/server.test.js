@@ -30,7 +30,7 @@ test.after(async () => {
 });
 
 // 実リクエストを送りステータスのみ返す(morgan 等のログは握りつぶす)
-function request(method, path, ip) {
+function request(method, path, ip, token) {
     return new Promise((resolve, reject) => {
         const saved = { log: console.log, info: console.info, error: console.error, warn: console.warn };
         console.log = console.info = console.error = console.warn = () => {};
@@ -41,8 +41,10 @@ function request(method, path, ip) {
             return origWrite.call(this, chunk, ...rest);
         };
         const restore = () => { Object.assign(console, saved); process.stdout.write = origWrite; };
+        const headers = method === 'GET' ? { 'x-forwarded-for': ip } : { 'x-forwarded-for': ip, 'content-type': 'application/json' };
+        if (token) headers.authorization = `Bearer ${token}`;
         const req = http.request(
-            { host: '127.0.0.1', port, method, path, headers: method === 'GET' ? { 'x-forwarded-for': ip } : { 'x-forwarded-for': ip, 'content-type': 'application/json' } },
+            { host: '127.0.0.1', port, method, path, headers },
             (res) => {
                 res.resume();
                 res.on('end', () => { restore(); resolve(res.statusCode); });
@@ -53,21 +55,43 @@ function request(method, path, ip) {
     });
 }
 
-async function hit(method, path, ip, n) {
+async function hit(method, path, ip, n, token) {
     const codes = [];
-    for (let i = 0; i < n; i++) codes.push(await request(method, path, ip));
+    for (let i = 0; i < n; i++) codes.push(await request(method, path, ip, token));
     return codes;
 }
 
-test("POST '/' は共有IPから105回送っても 429 にならない", async () => {
-    const codes = await hit('POST', '/', '66.249.84.1', 105);
-    assert.ok(!codes.includes(429));
+// '/', '/request-sync', '/report-state' は Bearer トークン単位で制限する
+// (Google の共有IPから来るため IP 単位では制限しない)
+test("'/' は同一トークンで1200回目まで許可し、1201回目で 429。別トークンは影響を受けない", async () => {
+    const codes = await hit('POST', '/', '66.249.84.1', 1201, 'tokA');
+    assert.ok(!codes.slice(0, 1200).includes(429));
+    assert.strictEqual(codes[1200], 429);
+    assert.notStrictEqual(await request('POST', '/', '66.249.84.1', 'tokB'), 429);
 });
 
-test("'/request-sync' と '/report-state' は 429 にならない", async () => {
-    for (const p of ['/request-sync', '/report-state']) {
-        const codes = await hit('POST', p, '66.249.84.2', 105);
-        assert.ok(!codes.includes(429), p);
+test("共有IPから異なるトークンで700回ずつ送っても 429 にならない", async () => {
+    const ip = '66.249.84.2';
+    const a = await hit('POST', '/', ip, 700, 'tokA2');
+    const b = await hit('POST', '/', ip, 700, 'tokB2');
+    assert.ok(!a.includes(429));
+    assert.ok(!b.includes(429));
+});
+
+test("トークンなしは100回目まで許可し、101回目で 429。別IPは影響を受けない", async () => {
+    const codes = await hit('POST', '/', '203.0.113.20', 101);
+    assert.ok(!codes.slice(0, 100).includes(429));
+    assert.strictEqual(codes[100], 429);
+    assert.notStrictEqual(await request('POST', '/', '203.0.113.21'), 429);
+});
+
+test("'/', '/request-sync', '/report-state' は同一トークンでバケットを共有する", async () => {
+    const paths = ['/', '/request-sync', '/report-state'];
+    for (let i = 0; i < 1200; i++) {
+        assert.notStrictEqual(await request('POST', paths[i % 3], '66.249.84.3', 'tokShared'), 429);
+    }
+    for (const p of paths) {
+        assert.strictEqual(await request('POST', p, '66.249.84.3', 'tokShared'), 429, p);
     }
 });
 
