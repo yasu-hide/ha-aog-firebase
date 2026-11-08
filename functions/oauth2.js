@@ -20,7 +20,7 @@ const AuthModel = {
                 user: { id: token.user_id }
             };
         } catch (error) {
-            console.error('getAccessToken error:', error);
+            console.error('getAccessToken error:', error?.code ?? error?.name);
             throw error;
         }
     },
@@ -38,7 +38,7 @@ const AuthModel = {
                 user: { id: token.user_id }
             };
         } catch (error) {
-            console.error('getRefreshToken error:', error);
+            console.error('getRefreshToken error:', error?.code ?? error?.name);
             throw error;
         }
     },
@@ -57,7 +57,7 @@ const AuthModel = {
                 user: { id: code.user_id }
             };
         } catch (error) {
-            console.error('getAuthorizationCode error:', error);
+            console.error('getAuthorizationCode error:', error?.code ?? error?.name);
             throw error;
         }
     },
@@ -72,7 +72,7 @@ const AuthModel = {
                 grants: client.grants
             };
         } catch (error) {
-            console.error('getClient error:', error);
+            console.error('getClient error:', error?.code ?? error?.name);
             throw error;
         }
     },
@@ -103,7 +103,7 @@ const AuthModel = {
                 user: { id: accessToken.user_id }
             };
         } catch (error) {
-            console.error('saveToken error:', error);
+            console.error('saveToken error:', error?.code ?? error?.name);
             throw error;
         }
     },
@@ -125,7 +125,7 @@ const AuthModel = {
                 user: { id: authorizationCode.user_id }
             };
         } catch (error) {
-            console.error('saveAuthorizationCode error:', error);
+            console.error('saveAuthorizationCode error:', error?.code ?? error?.name);
             throw error;
         }
     },
@@ -135,7 +135,7 @@ const AuthModel = {
             await AuthStore.unsetRefreshToken(token.refreshToken);
             return true;
         } catch (error) {
-            console.error('revokeToken error:', error);
+            console.error('revokeToken error:', error?.code ?? error?.name);
             throw error;
         }
     },
@@ -145,7 +145,7 @@ const AuthModel = {
             await AuthStore.unsetAuthCode(code.code);
             return true;
         } catch (error) {
-            console.error('revokeAuthorizationCode error:', error);
+            console.error('revokeAuthorizationCode error:', error?.code ?? error?.name);
             throw error;
         }
     }
