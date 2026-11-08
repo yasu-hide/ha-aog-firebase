@@ -29,7 +29,7 @@ exports.requestsync = async (req, res) => {
         console.log("request-sync:", fetchRes.status, fetchRes.statusText);
         res.status(200).json({ status: 'OK' });
     } catch (error) {
-        showError(res, error.message || error);
+        showError(res, error);
     }
 };
 
@@ -49,19 +49,19 @@ exports.reportstate = async (req, res) => {
     try {
         const auth = await oauth.authenticate(request, response);
         console.info('Auth OK', auth);
-        if (!req.body.devices) {
+        if (!req.body?.devices) {
             throw new SyntaxError('devices required');
         }
         options.body = JSON.stringify({
             agentUserId: auth.user.id,
             requestId: 'request-' + Math.random(),
-            devices: req.body.devices
+            devices: req.body?.devices
         });
         const fetchRes = await fetch(reportStateEndpoint + apiKey, options);
         console.log('report-state:', fetchRes.status, fetchRes.statusText);
         res.status(200).json({ status: 'OK' });
     } catch (error) {
-        showError(res, error.message || error);
+        showError(res, error);
     }
 };
 
@@ -74,15 +74,16 @@ exports.root = async (req, res) => {
     try {
         const auth = await oauth.authenticate(request, response);
         console.info('Auth OK', auth);
-        if (!req.body.inputs) {
+        const inputs = req.body?.inputs;
+        if (!Array.isArray(inputs)) {
             return showError(res, "missing inputs");
         }
         const params = {
             uid: auth.user.id,
             access_token: auth.accessToken
         };
-        for (let i = 0; i < req.body.inputs.length; i++) {
-            switch (req.body.inputs[i].intent) {
+        for (let i = 0; i < inputs.length; i++) {
+            switch (inputs[i]?.intent) {
                 case "action.devices.SYNC":
                     await sync(req, res, params);
                     return;
@@ -97,7 +98,8 @@ exports.root = async (req, res) => {
                     return;
             }
         }
+        showError(res, "missing intent");
     } catch (error) {
-        showError(res, error.message || error);
+        showError(res, error);
     }
 };

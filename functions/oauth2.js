@@ -3,6 +3,7 @@
 const { getAuth } = require('firebase-admin/auth');
 const OAuth2Server = require("oauth2-server");
 const AuthStore = require("./oauth2_store");
+const { isClientOAuthError } = require('./utils');
 const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
 
 const AuthModel = {
@@ -11,6 +12,7 @@ const AuthModel = {
             const token = await AuthStore.getAccessToken(accessToken);
             if (!token) return null;
             const client = await AuthStore.getClient(token.client_id);
+            if (!client) return null;
             return {
                 accessToken: token.access_token,
                 accessTokenExpiresAt: new Date(token.expires_at),
@@ -28,6 +30,7 @@ const AuthModel = {
             const token = await AuthStore.getRefreshToken(refreshToken);
             if (!token) return null;
             const client = await AuthStore.getClient(token.client_id);
+            if (!client) return null;
             return {
                 refreshToken: token.refresh_token,
                 refreshTokenExpiresAt: new Date(token.expires_at),
@@ -45,6 +48,7 @@ const AuthModel = {
             const code = await AuthStore.getAuthorizationCode(authCode);
             if (!code) return null;
             const client = await AuthStore.getClient(code.client_id);
+            if (!client) return null;
             return {
                 code: code.authorization_code,
                 expiresAt: new Date(code.expires_at),
@@ -61,6 +65,7 @@ const AuthModel = {
         console.log('getClient:', clientId, clientSecret);
         try {
             const client = await AuthStore.getClient(clientId, clientSecret);
+            if (!client) return null;
             return {
                 id: client.id,
                 redirectUris: client.redirect_uris,
@@ -151,15 +156,22 @@ const oauth = new OAuth2Server({ model: AuthModel });
 exports.auth = async (req, res, _next) => {
     console.info('/auth query', req.query);
     console.info('/auth body', req.body);
-    const redirect_uri = (req.query.redirect_uri || req.body.redirect_uri);
-    const state = (req.query.state || req.body.state);
+    const redirect_uri = (req.query?.redirect_uri || req.body?.redirect_uri);
+    const state = (req.query?.state || req.body?.state);
     const bearer = req.headers.authorization;
 
     if (bearer && bearer.startsWith('Bearer ')) {
         const idToken = bearer.split('Bearer ')[1];
         delete req.headers.authorization;
+        let decodedIdToken;
         try {
-            const decodedIdToken = await getAuth().verifyIdToken(idToken);
+            decodedIdToken = await getAuth().verifyIdToken(idToken);
+        } catch (error) {
+            console.error('Auth verify error:', error);
+            res.status(401).json({ error: "invalid_request", description: 'Unauthorized' });
+            return;
+        }
+        try {
             const options = { authenticateHandler: { handle: () => ({ id: decodedIdToken.sub }) } };
             const request = new OAuth2Server.Request(req);
             const response = new OAuth2Server.Response(res);
@@ -167,8 +179,9 @@ exports.auth = async (req, res, _next) => {
             res.status(200).send(authcode.authorizationCode);
             return;
         } catch (error) {
-            console.error('Auth verify error:', error);
-            res.status(401).json({ error: "invalid_request", description: error.message || error });
+            console.error('Auth authorize error:', error);
+            const description = isClientOAuthError(error) ? error.message : 'invalid_request';
+            res.status(401).json({ error: "invalid_request", description: description });
             return;
         }
     }
@@ -195,7 +208,8 @@ exports.token = async (req, res, _next) => {
         if (response) {
             res.set(response.headers);
         }
-        res.status(400).send({ error: "invalid_request", description: error.message || error });
+        const description = isClientOAuthError(error) ? error.message : 'invalid_request';
+        res.status(400).send({ error: "invalid_request", description: description });
     }
 };
 

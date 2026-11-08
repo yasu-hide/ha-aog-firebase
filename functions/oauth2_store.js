@@ -53,12 +53,12 @@ exports.getClient = async (client_id, client_secret) => {
     const clientId = app_clientId();
     if (client_id !== clientId) {
         console.error('mismatch client id', client_id, clientId);
-        throw new Error('mismatch client id');
+        return null;
     }
     const clientSecret = app_clientSecret();
     if (client_secret && client_secret !== clientSecret) {
         console.error('mismatch client secret', client_secret, clientSecret);
-        throw new Error('mismatch client secret');
+        return null;
     }
     return {
         id: clientId,

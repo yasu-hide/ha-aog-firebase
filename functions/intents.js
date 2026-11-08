@@ -47,7 +47,7 @@ const payload_data = (deviceId, deviceNickname, deviceData) => {
 
 const sync = async (req, res, params = {}) => {
     try {
-        const deviceProps = { requestId: req.body.requestId, payload: { agentUserId: params.uid, devices: [] } };
+        const deviceProps = { requestId: req.body?.requestId, payload: { agentUserId: params.uid, devices: [] } };
         const deviceData = await Promise.all([
             Model.getGroupDevicesByUserId(params.uid),
             Model.getUserDevices(params.uid)
@@ -60,14 +60,14 @@ const sync = async (req, res, params = {}) => {
         console.log('sync:', JSON.stringify(deviceProps));
         res.status(200).json(deviceProps);
     } catch (error) {
-        showError(res, error.message || error);
+        showError(res, error);
     }
 };
 
 const query = async (req, res, _params = {}) => {
     try {
-        const deviceStates = { requestId: req.body.requestId, payload: { devices: {} } };
-        const reqStates = req.body.inputs[0].payload.devices;
+        const deviceStates = { requestId: req.body?.requestId, payload: { devices: {} } };
+        const reqStates = req.body?.inputs[0].payload.devices;
 
         const states = await Promise.all(reqStates.map(reqDevice => Model.getStates(reqDevice.id)));
 
@@ -75,14 +75,14 @@ const query = async (req, res, _params = {}) => {
         console.log('query:', JSON.stringify(deviceStates));
         res.status(200).json(deviceStates);
     } catch (error) {
-        showError(res, error.message || error);
+        showError(res, error);
     }
 };
 
 const execute = async (req, res, _params = {}) => {
     try {
         const respCommands = [];
-        const reqCommands = req.body.inputs[0].payload.commands;
+        const reqCommands = req.body?.inputs[0].payload.commands;
         const resPromises = [];
 
         reqCommands.forEach((curCommand) => {
@@ -98,7 +98,7 @@ const execute = async (req, res, _params = {}) => {
         });
 
         const resBody = {
-            requestId: req.body.requestId,
+            requestId: req.body?.requestId,
             payload: {
                 commands: respCommands
             }
@@ -108,7 +108,7 @@ const execute = async (req, res, _params = {}) => {
         console.log('execute:', JSON.stringify(resBody));
         res.status(200).json(resBody);
     } catch (error) {
-        showError(res, error.message || error);
+        showError(res, error);
     }
 };
 
