@@ -155,8 +155,9 @@ test("POST '/' に inputs: [] を送るとハングせず 400 missing intent", a
     assert.deepStrictEqual(JSON.parse(r.body), { error: 'missing intent' });
 });
 
-test("GET '/auth' (body も query も無し) は TypeError にならずログイン画面を返す", async () => {
+test("GET '/auth' (body も query も無し) は TypeError にならず 400 を返す", async () => {
+    // client_id が無いので画面は出さない (auth-redirect.test.js)。ここでは 500/TypeError にならないことを確認する。
     const r = await request('GET', '/auth');
-    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.status, 400);
     assert.ok(!r.body.includes('TypeError'));
 });

@@ -3,7 +3,7 @@
 const { getAuth } = require('firebase-admin/auth');
 const OAuth2Server = require("oauth2-server");
 const AuthStore = require("./oauth2_store");
-const { isClientOAuthError, redactForLog } = require('./utils');
+const { isClientOAuthError, redactForLog, showError } = require('./utils');
 const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
 
 const AuthModel = {
@@ -156,7 +156,6 @@ const oauth = new OAuth2Server({ model: AuthModel });
 exports.auth = async (req, res, _next) => {
     console.info('/auth query', redactForLog(req.query));
     console.info('/auth body', redactForLog(req.body));
-    const redirect_uri = (req.query?.redirect_uri || req.body?.redirect_uri);
     const state = (req.query?.state || req.body?.state);
     const bearer = req.headers.authorization;
 
@@ -184,6 +183,28 @@ exports.auth = async (req, res, _next) => {
             res.status(401).json({ error: "invalid_request", description: description });
             return;
         }
+    }
+    // login.ejs は redirect_uri をそのまま遷移先に使うため、画面を出す前に登録済みの値と照合する。
+    const clientId = req.query?.client_id ?? req.body?.client_id;
+    const requestedUri = req.query?.redirect_uri ?? req.body?.redirect_uri;
+    const invalidRequest = () => res.status(400).json({ error: 'invalid_request', description: 'invalid client_id or redirect_uri' });
+    if (typeof clientId !== 'string' || clientId === '' ||
+        (requestedUri !== undefined && requestedUri !== null && typeof requestedUri !== 'string')) {
+        return invalidRequest();
+    }
+    let client;
+    try {
+        client = await AuthStore.getClient(clientId);
+    } catch (error) {
+        return showError(res, error);
+    }
+    if (!client) {
+        return invalidRequest();
+    }
+    // 未指定・空は oauth2-server の getRedirectUri と同様に先頭の登録済み URI を使う。
+    const redirect_uri = requestedUri ? requestedUri : client.redirect_uris[0];
+    if (!client.redirect_uris.includes(redirect_uri)) {
+        return invalidRequest();
     }
     return res.render('login', {
         config: firebaseConfig,
