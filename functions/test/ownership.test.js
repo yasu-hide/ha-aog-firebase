@@ -115,6 +115,18 @@ test('sync: ユーザー A の SYNC に B のデバイス・グループデバ�
     assert.deepStrictEqual(res.body.payload.devices.map((d) => d.id).sort(), ['gdA', 'udA']);
 });
 
+test('sync: グループと user_devices で同一 id のデバイスは 1 件だけ返る (後勝ち)', async () => {
+    docs.set('group_devices/dup', { groupId: 'gA', deviceId: 'dev1', name: 'group side' });
+    docs.set('user_devices/dup', { userId: 'userA', deviceId: 'dev1', name: 'user side' });
+    const res = fakeRes();
+    await quiet(() => intents.sync({ body: { requestId: 'r1' } }, res, { uid: 'userA' }));
+    assert.strictEqual(res.statusCode, 200);
+    const dups = res.body.payload.devices.filter((d) => d.id === 'dup');
+    assert.strictEqual(dups.length, 1);
+    assert.deepStrictEqual(dups[0].name.nicknames, ['user side']);
+    assert.strictEqual(res.body.payload.devices.length, 3);
+});
+
 test('sync: 参照切れのデバイス (deviceId / deviceReference) があっても 200 で正常分だけ返す', async () => {
     docs.set('user_devices/udGoneId', { userId: 'userA', deviceId: 'devGone', name: 'gone by id' });
     docs.set('user_devices/udGoneRef', {

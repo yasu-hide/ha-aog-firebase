@@ -2,20 +2,6 @@
 
 const OAuth2Server = require('@node-oauth/oauth2-server');
 
-const valuniq = (obj) => {
-    const arrobj = {};
-    for (let i = 0; i < obj.length; i++) {
-        arrobj[obj[i]['id']] = obj[i];
-    }
-    const newret = [];
-    for (let key in arrobj) {
-        newret.push(arrobj[key]);
-    }
-    return newret;
-};
-
-const flatten = (arr) => Array.isArray(arr) ? [].concat.apply([], arr.map(flatten)) : arr;
-
 // クライアントに message を見せてよい OAuth エラーか。
 // ServerError (5xx) は内部エラーの message をそのまま持つため除外する。
 const isClientOAuthError = (error) => error instanceof OAuth2Server.OAuthError && error.code < 500;
@@ -76,8 +62,6 @@ const redactForLog = (value) => {
 };
 
 module.exports = {
-    valuniq,
-    flatten,
     isClientOAuthError,
     InputError,
     showError,

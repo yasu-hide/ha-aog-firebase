@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const bodyParser = require('body-parser');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const ejs = require('ejs');
@@ -60,8 +59,8 @@ const tokenLimiter = rateLimit({
 // :url を query なしの path に差し替えた dev 形式で出力する。
 const logPath = (req) => (req.originalUrl || req.url || '').split('?')[0];
 server.use(morgan((tokens, req, res) => morgan.dev({ ...tokens, url: logPath }, req, res)));
-server.use(bodyParser.json());
-server.use(bodyParser.urlencoded({ extended: true }));
+server.use(express.json());
+server.use(express.urlencoded({ extended: true }));
 server.set('trust proxy', 1);
 server.use(cookieParser());
 server.set("view engine", "ejs");

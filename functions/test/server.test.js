@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
+const { stripVTControlCharacters } = require('node:util');
 
 const savedConfig = process.env.FIREBASE_CONFIG;
 process.env.FIREBASE_CONFIG = JSON.stringify({
@@ -30,29 +31,34 @@ test.after(async () => {
 });
 
 // 実リクエストを送りステータスのみ返す(morgan 等のログは握りつぶす)
-function request(method, path, ip, token) {
-    return new Promise((resolve, reject) => {
-        const saved = { log: console.log, info: console.info, error: console.error, warn: console.warn };
-        console.log = console.info = console.error = console.warn = () => {};
-        // morgan は process.stdout へ直接書くので、アクセスログ行だけ捨てる
-        const origWrite = process.stdout.write;
-        process.stdout.write = function (chunk, ...rest) {
-            if (String(chunk).includes('[0m') && /(GET|POST) /.test(String(chunk))) return true;
-            return origWrite.call(this, chunk, ...rest);
-        };
-        const restore = () => { Object.assign(console, saved); process.stdout.write = origWrite; };
-        const headers = method === 'GET' ? { 'x-forwarded-for': ip } : { 'x-forwarded-for': ip, 'content-type': 'application/json' };
-        if (token) headers.authorization = `Bearer ${token}`;
-        const req = http.request(
-            { host: '127.0.0.1', port, method, path, headers },
-            (res) => {
-                res.resume();
-                res.on('end', () => { restore(); resolve(res.statusCode); });
-            }
-        );
-        req.on('error', (e) => { restore(); reject(e); });
-        req.end(method === 'GET' ? undefined : '{}');
-    });
+async function request(method, path, ip, token) {
+    const saved = { log: console.log, info: console.info, error: console.error, warn: console.warn };
+    console.log = console.info = console.error = console.warn = () => {};
+    // morgan は process.stdout へ直接書くので、アクセスログ行 (色コードを除いた 'POST /path 200 1.2 ms - 25') だけ捨てる
+    const origWrite = process.stdout.write;
+    process.stdout.write = function (chunk, ...rest) {
+        const line = stripVTControlCharacters(String(chunk));
+        if (/^(GET|POST) \S+ \d{3} [\d.]+ ms - (\d+|-)\s*$/.test(line)) return true;
+        return origWrite.call(this, chunk, ...rest);
+    };
+    const headers = method === 'GET' ? { 'x-forwarded-for': ip } : { 'x-forwarded-for': ip, 'content-type': 'application/json' };
+    if (token) headers.authorization = `Bearer ${token}`;
+    try {
+        return await new Promise((resolve, reject) => {
+            const req = http.request(
+                { host: '127.0.0.1', port, method, path, headers },
+                (res) => {
+                    res.resume();
+                    res.on('end', () => resolve(res.statusCode));
+                }
+            );
+            req.on('error', reject);
+            req.end(method === 'GET' ? undefined : '{}');
+        });
+    } finally {
+        Object.assign(console, saved);
+        process.stdout.write = origWrite;
+    }
 }
 
 async function hit(method, path, ip, n, token) {
@@ -87,8 +93,9 @@ test("トークンなしは100回目まで許可し、101回目で 429。別IP�
 
 test("'/', '/request-sync', '/report-state' は同一トークンでバケットを共有する", async () => {
     const paths = ['/', '/request-sync', '/report-state'];
+    // 無効なトークンはハンドラ手前の認証で 401 になる (制限に達するまでは 429 ではない)
     for (let i = 0; i < 1200; i++) {
-        assert.notStrictEqual(await request('POST', paths[i % 3], '66.249.84.3', 'tokShared'), 429);
+        assert.strictEqual(await request('POST', paths[i % 3], '66.249.84.3', 'tokShared'), 401);
     }
     for (const p of paths) {
         assert.strictEqual(await request('POST', p, '66.249.84.3', 'tokShared'), 429, p);
