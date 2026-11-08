@@ -52,11 +52,16 @@ const noLeak = async (fn) => {
 // oauth2_store は getDatabase を require 時に分割代入で取り込むため、
 // require より前に firebase-admin/database のエクスポートを偽 DB に差し替える。
 const fakeDb = {};
+const dbCalls = [];
+let dbFailure = null; // 設定すると ref().set/once がこのエラーで失敗する
 require('firebase-admin/database').getDatabase = () => ({
-    ref: (path) => ({
-        set: async (value) => { fakeDb[path] = value; },
-        once: async () => ({ val: () => fakeDb[path] ?? null }),
-    }),
+    ref: (path) => {
+        dbCalls.push(path);
+        return {
+            set: async (value) => { if (dbFailure) throw dbFailure; fakeDb[path] = value; },
+            once: async () => { if (dbFailure) throw dbFailure; return { val: () => fakeDb[path] ?? null }; },
+        };
+    },
 });
 
 capture();
@@ -67,7 +72,11 @@ const { redactForLog } = require('../utils');
 restore();
 
 const originalStore = { ...AuthStore };
-test.afterEach(() => Object.assign(AuthStore, originalStore));
+test.afterEach(() => {
+    Object.assign(AuthStore, originalStore);
+    dbCalls.length = 0;
+    dbFailure = null;
+});
 
 const future = () => new Date(Date.now() + 3600 * 1000).toJSON();
 
@@ -108,20 +117,91 @@ test('store.getClient: 長さの異なる/同じ長さの誤った secret は nu
 
 // --- store の DB 読み書き ---
 
+// トークン・認可コードは 32 byte の hex (現行 64 文字、旧 40 文字)
+const HEX_ACCESS = 'a1'.repeat(32);
+const HEX_REFRESH = 'b2'.repeat(32);
+const HEX_CODE = 'c3'.repeat(32);
+
 test('store set/get: トークン・コードの値もキーもログに出さない', async () => {
     await noLeak(async () => {
-        await AuthStore.setAccessTokens('SENTINEL-ACCESS-TOKEN', { access_token: 'SENTINEL-ACCESS-TOKEN', user_id: 'u1' });
-        await AuthStore.setRefreshToken('SENTINEL-REFRESH-TOKEN', { refresh_token: 'SENTINEL-REFRESH-TOKEN' });
-        await AuthStore.setAuthCode('SENTINEL-AUTH-CODE', { authorization_code: 'SENTINEL-AUTH-CODE' });
-        const t = await AuthStore.getAccessToken('SENTINEL-ACCESS-TOKEN');
-        assert.strictEqual(t.access_token, 'SENTINEL-ACCESS-TOKEN');
-        await AuthStore.getRefreshToken('SENTINEL-REFRESH-TOKEN');
-        await AuthStore.getAuthorizationCode('SENTINEL-AUTH-CODE');
-        await AuthStore.unsetRefreshToken('SENTINEL-REFRESH-TOKEN');
-        await AuthStore.unsetAuthCode('SENTINEL-AUTH-CODE');
+        await AuthStore.setAccessTokens(HEX_ACCESS, { access_token: HEX_ACCESS, user_id: 'u1' });
+        await AuthStore.setRefreshToken(HEX_REFRESH, { refresh_token: HEX_REFRESH });
+        await AuthStore.setAuthCode(HEX_CODE, { authorization_code: HEX_CODE });
+        const t = await AuthStore.getAccessToken(HEX_ACCESS);
+        assert.strictEqual(t.access_token, HEX_ACCESS);
+        await AuthStore.getRefreshToken(HEX_REFRESH);
+        await AuthStore.getAuthorizationCode(HEX_CODE);
+        await AuthStore.unsetRefreshToken(HEX_REFRESH);
+        await AuthStore.unsetAuthCode(HEX_CODE);
     });
+    const out = captured.join('\n');
+    for (const k of [HEX_ACCESS, HEX_REFRESH, HEX_CODE]) assert.ok(!out.includes(k));
     assert.ok(captured.some((l) => l.includes('accesstoken')), 'keytype は出力される');
-    assert.strictEqual(fakeDb['refreshtoken/SENTINEL-REFRESH-TOKEN'], null);
+    assert.strictEqual(fakeDb[`refreshtoken/${HEX_REFRESH}`], null);
+});
+
+// RTDB のパスを壊す文字 (. # $ [ ] /) や hex 以外を含む key は RTDB に渡さない
+const BAD_KEYS = ['a.b', 'a#b', 'a$b', 'a[b', 'a]b', 'a/b', '../x', 'zz'.repeat(32), 'a1'.repeat(65)];
+
+test('store.get*: 不正な key は RTDB を呼ばず null を返し、key をログに出さない', async () => {
+    for (const key of BAD_KEYS) {
+        for (const fn of [AuthStore.getAccessToken, AuthStore.getRefreshToken, AuthStore.getAuthorizationCode]) {
+            capture();
+            let result;
+            try { result = await fn(key); } finally { restore(); }
+            assert.strictEqual(result, null, key);
+            assert.ok(!captured.join('\n').includes(key), key);
+        }
+    }
+    assert.deepStrictEqual(dbCalls, []);
+});
+
+test('store.set*: 不正な key は RTDB を呼ばず、key を含まない Error を投げる', async () => {
+    for (const key of BAD_KEYS) {
+        for (const fn of [AuthStore.setAccessTokens, AuthStore.setRefreshToken, AuthStore.setAuthCode, AuthStore.unsetRefreshToken, AuthStore.unsetAuthCode]) {
+            capture();
+            let err;
+            try { await fn(key, { a: 1 }); } catch (e) { err = e; } finally { restore(); }
+            assert.ok(err instanceof Error, key);
+            assert.ok(!err.message.includes(key), err.message);
+            assert.ok(!captured.join('\n').includes(key), key);
+        }
+    }
+    assert.deepStrictEqual(dbCalls, []);
+});
+
+test('store: RTDB のエラーは code / name のみログに出し、message (パス入り) は出さない', async () => {
+    dbFailure = Object.assign(new Error(`Reference.child failed: path ${HEX_ACCESS} SENTINEL-DB-PATH`), { code: 'PERMISSION_DENIED' });
+    for (const fn of [() => AuthStore.getAccessToken(HEX_ACCESS), () => AuthStore.setAccessTokens(HEX_ACCESS, { a: 1 })]) {
+        capture();
+        try { await assert.rejects(fn); } finally { restore(); }
+        const out = captured.join('\n');
+        assert.ok(!out.includes('SENTINEL-DB-PATH') && !out.includes(HEX_ACCESS), out);
+        assert.ok(out.includes('PERMISSION_DENIED'), out);
+    }
+});
+
+test('AuthModel: store のエラーは code / name のみログに出し、message は出さない', async () => {
+    dbFailure = Object.assign(new Error('SENTINEL-DB-PATH message'), { code: 'PERMISSION_DENIED' });
+    const client = { id: 'client-id' };
+    const user = { id: 'u1' };
+    const token = { accessToken: HEX_ACCESS, accessTokenExpiresAt: future(), refreshToken: HEX_REFRESH, refreshTokenExpiresAt: future() };
+    const calls = [
+        () => AuthModel.getAccessToken(HEX_ACCESS),
+        () => AuthModel.getRefreshToken(HEX_REFRESH),
+        () => AuthModel.getAuthorizationCode(HEX_CODE),
+        () => AuthModel.saveToken(token, client, user),
+        () => AuthModel.saveAuthorizationCode({ authorizationCode: HEX_CODE, expiresAt: future(), redirectUri: 'https://x' }, client, user),
+        () => AuthModel.revokeToken({ ...token, client, user }),
+        () => AuthModel.revokeAuthorizationCode({ code: HEX_CODE, client, user }),
+    ];
+    for (const call of calls) {
+        capture();
+        try { await assert.rejects(call); } finally { restore(); }
+        const out = captured.join('\n');
+        assert.ok(!out.includes('SENTINEL-DB-PATH'), out);
+        assert.ok(out.includes('PERMISSION_DENIED'), out);
+    }
 });
 
 // --- AuthModel ---
@@ -155,6 +235,8 @@ test('AuthModel: 各メソッドがトークン・コード・secret をログ�
 
 // --- redactForLog ---
 
+const toPlain = (v) => JSON.parse(JSON.stringify(v));
+
 test('redactForLog: 機微なキーを大文字小文字を問わず再帰的に伏せ、入力を変更しない', () => {
     const input = {
         Client_Secret: 's', code: 'c', refresh_token: 'r', ACCESS_TOKEN: 'a', token: 't',
@@ -164,7 +246,8 @@ test('redactForLog: 機微なキーを大文字小文字を問わず再帰的に
     };
     const snapshot = JSON.parse(JSON.stringify(input));
     const out = redactForLog(input);
-    assert.deepStrictEqual(out, {
+    // redactForLog の戻り値は null プロトタイプなので、deepStrictEqual 用に通常のオブジェクトへ変換する。
+    assert.deepStrictEqual(toPlain(out), {
         Client_Secret: '[REDACTED]', code: '[REDACTED]', refresh_token: '[REDACTED]', ACCESS_TOKEN: '[REDACTED]',
         token: '[REDACTED]', password: '[REDACTED]', Authorization: '[REDACTED]', id_token: '[REDACTED]',
         grant_type: 'authorization_code', client_id: 'client-id',
@@ -173,11 +256,29 @@ test('redactForLog: 機微なキーを大文字小文字を問わず再帰的に
     assert.deepStrictEqual(input, snapshot);
 });
 
+test('redactForLog: camelCase / kebab-case のキーも伏せる', () => {
+    const out = redactForLog({
+        clientSecret: 's', refreshToken: 'r', idToken: 'i', accessToken: 'a', 'client-secret': 'c', Access_Token: 'x', keep: 1,
+    });
+    assert.deepStrictEqual({ ...out }, {
+        clientSecret: '[REDACTED]', refreshToken: '[REDACTED]', idToken: '[REDACTED]', accessToken: '[REDACTED]',
+        'client-secret': '[REDACTED]', Access_Token: '[REDACTED]', keep: 1,
+    });
+});
+
+test('redactForLog: JSON 由来の own __proto__ キーも保持する', () => {
+    const input = JSON.parse('{"__proto__": {"code": "c", "keep": 1}, "a": 1}');
+    const out = redactForLog(input);
+    assert.ok(Object.hasOwn(out, '__proto__'));
+    assert.deepStrictEqual({ ...out['__proto__'] }, { code: '[REDACTED]', keep: 1 });
+    assert.ok(JSON.stringify(out).includes('__proto__'));
+});
+
 test('redactForLog: オブジェクト以外はそのまま返す', () => {
     for (const v of [undefined, null, 'str', 42, true]) {
         assert.strictEqual(redactForLog(v), v);
     }
-    assert.deepStrictEqual(redactForLog([{ token: 'x' }]), [{ token: '[REDACTED]' }]);
+    assert.deepStrictEqual(toPlain(redactForLog([{ token: 'x' }])), [{ token: '[REDACTED]' }]);
 });
 
 test('store.getClient: 配列・オブジェクトの secret (extended urlencoded) は一致しても null', async () => {

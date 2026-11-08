@@ -56,7 +56,10 @@ const tokenLimiter = rateLimit({
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-server.use(morgan('dev'));
+// morgan('dev') は req.originalUrl をそのまま出し、クエリ文字列 (access_token 等) が残るため、
+// :url を query なしの path に差し替えた dev 形式で出力する。
+const logPath = (req) => (req.originalUrl || req.url || '').split('?')[0];
+server.use(morgan((tokens, req, res) => morgan.dev({ ...tokens, url: logPath }, req, res)));
 server.use(bodyParser.json());
 server.use(bodyParser.urlencoded({ extended: true }));
 server.set('trust proxy', 1);

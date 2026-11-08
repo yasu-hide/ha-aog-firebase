@@ -12,6 +12,15 @@ const app_redirectUris = [
 ];
 const app_grants = ['authorization_code', 'refresh_token'];
 
+// トークン・認可コードは @node-oauth/oauth2-server が生成する hex 文字列 (現行 64 文字、3.1.1 時代の保存分は 40 文字)。
+// . # $ [ ] / などで RTDB のパスを壊したり、パス入りのエラー文言が出たりしないよう、RTDB に渡す前に検証する。
+const KEY_RE = /^[0-9a-f]{1,128}$/i;
+
+// RTDB のエラーはメッセージにパス (= key) を含み得るため、code / name のみ出力する。
+const logDbError = (error) => {
+    console.error('database error:', error?.code ?? error?.name);
+};
+
 const setToDatabase = async (keytype, key, value = {}) => {
     // key はトークン・認可コードそのもの、value もそれらを含むため、keytype のみ出力する。
     console.log('%s set to database', keytype);
@@ -21,11 +30,14 @@ const setToDatabase = async (keytype, key, value = {}) => {
     if (!key) {
         throw new Error('Key required');
     }
+    if (typeof key !== 'string' || !KEY_RE.test(key)) {
+        throw new Error('Invalid key');
+    }
     try {
         await getDatabase().ref(`${keytype}/${key}`).set(value);
         return value;
     } catch (error) {
-        console.error(error);
+        logDbError(error);
         throw error;
     }
 };
@@ -38,11 +50,14 @@ const getFromDatabase = async (keytype, key) => {
     if (!key) {
         throw new Error('Key required');
     }
+    if (typeof key !== 'string' || !KEY_RE.test(key)) {
+        return null;
+    }
     try {
         const snapshot = await getDatabase().ref(`${keytype}/${key}`).once('value');
         return snapshot.val();
     } catch (error) {
-        console.error(error);
+        logDbError(error);
         throw error;
     }
 };
