@@ -1,7 +1,7 @@
 'use strict';
 
 const { getAuth } = require('firebase-admin/auth');
-const OAuth2Server = require("oauth2-server");
+const OAuth2Server = require("@node-oauth/oauth2-server");
 const AuthStore = require("./oauth2_store");
 const { isClientOAuthError, redactForLog, showError } = require('./utils');
 const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
@@ -170,6 +170,16 @@ exports.auth = async (req, res, _next) => {
             res.status(401).json({ error: "invalid_request", description: 'Unauthorized' });
             return;
         }
+        // PKCE は未対応のため code_challenge は無視する (認可コードに保存させない)。
+        // Express 5 の req.query は参照のたびに再生成される getter なので、コピーを上書きして差し替える。
+        const query = { ...req.query };
+        delete query.code_challenge;
+        delete query.code_challenge_method;
+        Object.defineProperty(req, 'query', { value: query, writable: true, configurable: true });
+        if (req.body && typeof req.body === 'object') {
+            delete req.body.code_challenge;
+            delete req.body.code_challenge_method;
+        }
         try {
             const options = { authenticateHandler: { handle: () => ({ id: decodedIdToken.sub }) } };
             const request = new OAuth2Server.Request(req);
@@ -201,7 +211,7 @@ exports.auth = async (req, res, _next) => {
     if (!client) {
         return invalidRequest();
     }
-    // 未指定・空は oauth2-server の getRedirectUri と同様に先頭の登録済み URI を使う。
+    // 未指定・空は @node-oauth/oauth2-server の getRedirectUri と同様に先頭の登録済み URI を使う。
     const redirect_uri = requestedUri ? requestedUri : client.redirect_uris[0];
     if (!client.redirect_uris.includes(redirect_uri)) {
         return invalidRequest();
@@ -216,6 +226,19 @@ exports.auth = async (req, res, _next) => {
 exports.token = async (req, res, _next) => {
     console.info('/token query', redactForLog(req.query));
     console.info('/token body', redactForLog(req.body));
+    // PKCE は未対応。フォークは code_verifier があると client secret の検証を省くため、ライブラリに渡す前に拒否する。
+    if (req.body?.code_verifier !== undefined || req.query?.code_verifier !== undefined) {
+        res.status(400).json({ error: 'invalid_request', description: 'code_verifier is not supported' });
+        return;
+    }
+    // scope は未使用。フォークは refresh で scope が付くと 400 invalid_scope にする (3.1.1 は無視) ため、ここで取り除く。
+    // req.query は Express 5 で参照のたびに再生成される getter なので、コピーを上書きして差し替える。
+    const query = { ...req.query };
+    delete query.scope;
+    Object.defineProperty(req, 'query', { value: query, writable: true, configurable: true });
+    if (req.body && typeof req.body === 'object') {
+        delete req.body.scope;
+    }
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
     // refresh token will expire in 10 years.

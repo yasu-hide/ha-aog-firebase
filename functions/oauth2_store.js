@@ -65,6 +65,8 @@ exports.getClient = async (client_id, client_secret) => {
         return null;
     }
     const clientSecret = app_clientSecret();
+    // client_secret なしで client を返すのは authorize (/auth) 用。/token は secret 必須だが、
+    // ライブラリ側の判定に依存しないよう oauth2.js の token で code_verifier を拒否している。
     // 配列・オブジェクト (extended urlencoded) を String() で一致させないよう、文字列のみ比較する。
     if (client_secret && (typeof client_secret !== 'string' || !safeEqual(client_secret, clientSecret))) {
         console.error('mismatch client secret');
