@@ -1,8 +1,7 @@
 'use strict';
 
-const functions = require('firebase-functions/v1');
 const OAuth2Server = require("oauth2-server");
-const fetch = require('node-fetch');
+const { HOMEGRAPH_API_KEY } = require('./params');
 const { showError } = require('./utils');
 const { sync, query, execute } = require('./intents');
 
@@ -15,7 +14,7 @@ exports.requestsync = async (req, res) => {
     const oauth = new OAuth2Server({ model: require("./oauth2").AuthModel });
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
-    const apiKey = functions.config().firebase.apiKey;
+    const apiKey = HOMEGRAPH_API_KEY.value();
     const options = {
         method: 'POST',
         headers: {
@@ -40,7 +39,7 @@ exports.reportstate = async (req, res) => {
     const oauth = new OAuth2Server({ model: require("./oauth2").AuthModel });
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
-    const apiKey = functions.config().firebase.apiKey;
+    const apiKey = HOMEGRAPH_API_KEY.value();
     const options = {
         method: 'POST',
         headers: {

@@ -1,13 +1,14 @@
 'use strict';
 
-const admin = require("firebase-admin");
+const { getFirestore } = require('firebase-admin/firestore');
+const { getDatabase } = require('firebase-admin/database');
 
 const getFromFirestore = (collection, doc) => {
-    return admin.firestore().collection(collection).doc(doc);
+    return getFirestore().collection(collection).doc(doc);
 };
 
 const getFromDatabase = (refkey, pkey) => {
-    return admin.database().ref(refkey + '/' + pkey).once('value');
+    return getDatabase().ref(refkey + '/' + pkey).once('value');
 };
 
 const Model = {};
@@ -25,7 +26,7 @@ const getPersonalDevices = async (personal, personalId) => {
             throw new SyntaxError('personal required');
     }
 
-    const querysnap = await admin.firestore().collection(personal).where(personalId_key, '==', personalId).get();
+    const querysnap = await getFirestore().collection(personal).where(personalId_key, '==', personalId).get();
 
     const devicePromises = querysnap.docs.map(async (docsnap) => {
         const docdata = docsnap.data();
@@ -113,7 +114,7 @@ Model.getCommands = async (indivDeviceId) => {
 };
 
 Model.setCommands = (indivDeviceId, commandData) => {
-    return admin.database().ref('commands/' + indivDeviceId).set(commandData);
+    return getDatabase().ref('commands/' + indivDeviceId).set(commandData);
 };
 
 Model.getStates = async (indivDeviceId) => {
@@ -125,11 +126,11 @@ Model.getStates = async (indivDeviceId) => {
 };
 
 Model.setStates = (indivDeviceId, statesData) => {
-    return admin.database().ref('states/' + indivDeviceId).update(statesData);
+    return getDatabase().ref('states/' + indivDeviceId).update(statesData);
 };
 
 Model.getGroupDevicesByUserId = async (userId) => {
-    const querysnap = await admin.firestore().collection('groups').select(userId).get();
+    const querysnap = await getFirestore().collection('groups').select(userId).get();
     const groupDevicePromises = [];
     querysnap.forEach((docsnap) => {
         if (docsnap && docsnap.exists)

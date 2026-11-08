@@ -1,10 +1,12 @@
 'use strict';
 
 const functions = require('firebase-functions/v1');
-const admin = require("firebase-admin");
+const { initializeApp, getApps } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
+const { OAUTH_CLIENT_SECRET } = require('./params');
 
-if (admin.apps.length === 0) {
-    admin.initializeApp();
+if (getApps().length === 0) {
+    initializeApp();
 }
 
 const server = require('./server');
@@ -13,7 +15,7 @@ exports.authAction = functions.auth.user().onCreate((userRecord, _context) => {
     const uid = userRecord.uid;
     const email = userRecord.email;
     console.log('user added:', uid);
-    return admin.firestore().collection('users').doc(uid).set({
+    return getFirestore().collection('users').doc(uid).set({
         id: uid,
         name: email,
         createdAt: (new Date()).toJSON()
@@ -22,7 +24,7 @@ exports.authAction = functions.auth.user().onCreate((userRecord, _context) => {
 
 exports.delAccount = functions.auth.user().onDelete((userRecord, _context) => {
     const uid = userRecord.uid;
-    return admin.firestore().collection('users').doc(uid).delete();
+    return getFirestore().collection('users').doc(uid).delete();
 });
 
 function wrapCloudFunctionHandler(handler) {
@@ -33,4 +35,4 @@ function wrapCloudFunctionHandler(handler) {
     };
 }
 
-exports.ha = functions.https.onRequest(wrapCloudFunctionHandler(server));
+exports.ha = functions.runWith({ secrets: [OAUTH_CLIENT_SECRET] }).https.onRequest(wrapCloudFunctionHandler(server));

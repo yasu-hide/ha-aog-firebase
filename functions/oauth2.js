@@ -1,6 +1,6 @@
 'use strict';
 
-const admin = require("firebase-admin");
+const { getAuth } = require('firebase-admin/auth');
 const OAuth2Server = require("oauth2-server");
 const AuthStore = require("./oauth2_store");
 const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
@@ -159,7 +159,7 @@ exports.auth = async (req, res, _next) => {
         const idToken = bearer.split('Bearer ')[1];
         delete req.headers.authorization;
         try {
-            const decodedIdToken = await admin.auth().verifyIdToken(idToken);
+            const decodedIdToken = await getAuth().verifyIdToken(idToken);
             const options = { authenticateHandler: { handle: () => ({ id: decodedIdToken.sub }) } };
             const request = new OAuth2Server.Request(req);
             const response = new OAuth2Server.Response(res);
