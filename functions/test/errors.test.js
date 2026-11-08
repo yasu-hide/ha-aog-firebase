@@ -80,13 +80,18 @@ test('AuthModel.getAccessToken: トークンのクライアントが不一致な
     } finally { unmute(); }
 });
 
-test('showError: OAuthError のメッセージは 400 で返す', () => {
-    const res = fakeRes();
-    mute();
-    try { showError(res, new OAuth2Server.InvalidTokenError('Invalid token: access token is invalid')); } finally { unmute(); }
-    assert.strictEqual(res.statusCode, 400);
-    assert.deepStrictEqual(res.body, { error: 'Invalid token: access token is invalid' });
-    assert.strictEqual(res.headers['Access-Control-Allow-Origin'], '*');
+test('showError: OAuthError のメッセージは error.code のステータスで返す', () => {
+    for (const [err, status] of [
+        [new OAuth2Server.InvalidTokenError('Invalid token: access token is invalid'), 401],
+        [new OAuth2Server.InvalidRequestError('Missing parameter'), 400]
+    ]) {
+        const res = fakeRes();
+        mute();
+        try { showError(res, err); } finally { unmute(); }
+        assert.strictEqual(res.statusCode, status);
+        assert.deepStrictEqual(res.body, { error: err.message });
+        assert.strictEqual(res.headers['Access-Control-Allow-Origin'], '*');
+    }
 });
 
 test('showError: 想定外エラーは 500 で internal_error のみ返す', () => {
@@ -160,4 +165,59 @@ test("GET '/auth' (body も query も無し) は TypeError にならず 400 を�
     const r = await request('GET', '/auth');
     assert.strictEqual(r.status, 400);
     assert.ok(!r.body.includes('TypeError'));
+});
+
+// --- 無効トークンは 401 (フルフィルメント) ---
+for (const path of ['/', '/request-sync', '/report-state']) {
+    test(`POST '${path}' はトークン無しなら 401`, async () => {
+        const r = await request('POST', path, {
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        assert.strictEqual(r.status, 401);
+    });
+
+    test(`POST '${path}' は期限切れトークンなら 401`, async () => {
+        AuthStore.getAccessToken = async () => ({ ...futureToken('client-id'), expires_at: new Date(Date.now() - 1000).toJSON() });
+        const r = await request('POST', path, {
+            headers: { 'content-type': 'application/json', authorization: 'Bearer tok' },
+            body: JSON.stringify({})
+        });
+        assert.strictEqual(r.status, 401);
+    });
+}
+
+// --- /token のエラー ---
+const basic = (id, secret) => 'Basic ' + Buffer.from(`${id}:${secret}`).toString('base64');
+const tokenRequest = (params, authorization = basic('client-id', 'client-secret')) => request('POST', '/token', {
+    headers: { 'content-type': 'application/x-www-form-urlencoded', authorization },
+    body: new URLSearchParams(params).toString()
+});
+
+test("POST '/token' は存在しない認可コードなら 400 invalid_grant", async () => {
+    AuthStore.getAuthorizationCode = async () => null;
+    const r = await tokenRequest({ grant_type: 'authorization_code', code: 'nope', redirect_uri: 'https://example.com/cb' });
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual(JSON.parse(r.body).error, 'invalid_grant');
+});
+
+test("POST '/token' は存在しないリフレッシュトークンなら 400 invalid_grant", async () => {
+    AuthStore.getRefreshToken = async () => null;
+    const r = await tokenRequest({ grant_type: 'refresh_token', refresh_token: 'nope' });
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual(JSON.parse(r.body).error, 'invalid_grant');
+});
+
+test("POST '/token' は Basic 認証の client が誤りなら 401 invalid_client", async () => {
+    const r = await tokenRequest({ grant_type: 'refresh_token', refresh_token: 'x' }, basic('wrong', 'wrong'));
+    assert.strictEqual(r.status, 401);
+    assert.strictEqual(JSON.parse(r.body).error, 'invalid_client');
+});
+
+test("POST '/token' は AuthStore の例外なら 500 server_error で内部メッセージを返さない", async () => {
+    AuthStore.getRefreshToken = async () => { throw new Error('mismatch secret db path'); };
+    const r = await tokenRequest({ grant_type: 'refresh_token', refresh_token: 'x' });
+    assert.strictEqual(r.status, 500);
+    assert.deepStrictEqual(JSON.parse(r.body), { error: 'server_error', description: 'internal_error' });
+    assert.ok(!r.body.includes('mismatch'));
 });
