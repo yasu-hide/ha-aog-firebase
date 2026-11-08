@@ -72,47 +72,6 @@ Model.getDevice = async (deviceId) => {
     return {};
 };
 
-Model.getRemote = async (remoteId) => {
-    const docsnap = await getFromFirestore('remotes', remoteId).get();
-    if (docsnap && docsnap.exists) {
-        return {
-            id: docsnap.id,
-            data: docsnap.data()
-        };
-    }
-    return {};
-};
-
-Model.getUser = async (userId) => {
-    const docsnap = await getFromFirestore('users', userId).get();
-    if (docsnap && docsnap.exists) {
-        return {
-            id: docsnap.id,
-            data: docsnap.data()
-        };
-    }
-    return {};
-};
-
-Model.getGroup = async (groupId) => {
-    const docsnap = await getFromFirestore('groups', groupId).get();
-    if (docsnap && docsnap.exists) {
-        return {
-            id: docsnap.id,
-            data: docsnap.data()
-        };
-    }
-    return {};
-};
-
-Model.getCommands = async (indivDeviceId) => {
-    const snap = await getFromDatabase('commands', indivDeviceId);
-    return {
-        id: indivDeviceId,
-        data: snap.val()
-    };
-};
-
 Model.setCommands = (indivDeviceId, commandData) => {
     return getDatabase().ref('commands/' + indivDeviceId).set(commandData);
 };
@@ -123,10 +82,6 @@ Model.getStates = async (indivDeviceId) => {
         id: indivDeviceId,
         data: snap.val()
     };
-};
-
-Model.setStates = (indivDeviceId, statesData) => {
-    return getDatabase().ref('states/' + indivDeviceId).update(statesData);
 };
 
 Model.getGroupDevicesByUserId = async (userId) => {
