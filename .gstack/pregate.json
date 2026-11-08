@@ -11,15 +11,6 @@
       "functions/test/ownership.test.js",
       "functions/test/server.test.js"
     ],
-    "functions/.snyk": [
-      "functions/test/auth-redirect.test.js",
-      "functions/test/errors.test.js",
-      "functions/test/load.test.js",
-      "functions/test/logging.test.js",
-      "functions/test/oauth-flow.test.js",
-      "functions/test/ownership.test.js",
-      "functions/test/server.test.js"
-    ],
     "functions/eslint.config.js": [
       "functions/test/auth-redirect.test.js",
       "functions/test/errors.test.js",
