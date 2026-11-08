@@ -20,8 +20,16 @@ const flatten = (arr) => Array.isArray(arr) ? [].concat.apply([], arr.map(flatte
 // ServerError (5xx) は内部エラーの message をそのまま持つため除外する。
 const isClientOAuthError = (error) => error instanceof OAuth2Server.OAuthError && error.code < 500;
 
+// 入力検証エラー。showError が message をクライアントに返してよいことを示す。
+class InputError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'InputError';
+    }
+}
+
 // error は文字列 (固定メッセージ) または Error。詳細はサーバーログにのみ出す。
-// 文字列・SyntaxError (入力不正) は 400、OAuthError は error.code (400/401/403) でメッセージを返し、
+// 文字列・InputError (入力不正) は 400、OAuthError は error.code (400/401/403) でメッセージを返し、
 // それ以外の想定外エラーは 500 で固定文字列 'internal_error' を返す。
 const showError = (res, error) => {
     console.error(error);
@@ -32,7 +40,7 @@ const showError = (res, error) => {
     } else if (isClientOAuthError(error)) {
         status = error.code;
         message = error.message;
-    } else if (error instanceof SyntaxError) {
+    } else if (error instanceof InputError) {
         message = error.message;
     } else {
         status = 500;
@@ -71,6 +79,7 @@ module.exports = {
     valuniq,
     flatten,
     isClientOAuthError,
+    InputError,
     showError,
     redactForLog
 };

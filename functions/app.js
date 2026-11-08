@@ -2,7 +2,7 @@
 
 const OAuth2Server = require("@node-oauth/oauth2-server");
 const { HOMEGRAPH_API_KEY } = require('./params');
-const { showError, redactForLog } = require('./utils');
+const { InputError, showError, redactForLog } = require('./utils');
 const { sync, query, execute } = require('./intents');
 const Model = require('./models');
 
@@ -52,7 +52,7 @@ exports.reportstate = async (req, res) => {
         console.info('Auth OK', auth.user.id);
         const reqDevices = req.body?.devices;
         if (!reqDevices || typeof reqDevices !== 'object' || Array.isArray(reqDevices)) {
-            throw new SyntaxError('devices required');
+            throw new InputError('devices required');
         }
         // 所有していない device ID を states / notifications から除外する
         const owned = await Model.checkOwnership(auth.user.id, [

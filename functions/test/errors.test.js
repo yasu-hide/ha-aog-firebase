@@ -21,7 +21,7 @@ mute();
 const OAuth2Server = require('@node-oauth/oauth2-server');
 const AuthStore = require('../oauth2_store');
 const { AuthModel } = require('../oauth2');
-const { showError } = require('../utils');
+const { showError, InputError } = require('../utils');
 const server = require('../server');
 unmute();
 
@@ -105,14 +105,22 @@ test('showError: 想定外エラーは 500 で internal_error のみ返す', () 
     }
 });
 
-test('showError: 文字列と SyntaxError は 400 でそのまま返す', () => {
-    for (const [arg, msg] of [['missing inputs', 'missing inputs'], [new SyntaxError('devices required'), 'devices required']]) {
+test('showError: 文字列と InputError は 400 でそのまま返す', () => {
+    for (const [arg, msg] of [['missing inputs', 'missing inputs'], [new InputError('devices required'), 'devices required']]) {
         const res = fakeRes();
         mute();
         try { showError(res, arg); } finally { unmute(); }
         assert.strictEqual(res.statusCode, 400);
         assert.deepStrictEqual(res.body, { error: msg });
     }
+});
+
+test('showError: models.js 由来の SyntaxError は 500 internal_error で message を返さない', () => {
+    const res = fakeRes();
+    mute();
+    try { showError(res, new SyntaxError('personal required')); } finally { unmute(); }
+    assert.strictEqual(res.statusCode, 500);
+    assert.deepStrictEqual(res.body, { error: 'internal_error' });
 });
 
 // --- HTTP 経由のテスト ---
