@@ -54,6 +54,11 @@ const sync = async (req, res, params = {}) => {
         ]);
 
         valuniq(flatten(deviceData)).forEach((data) => {
+            // 参照切れのデバイスは除外し、1 台のために SYNC 全体が失敗しないようにする
+            if (data.data == null) {
+                console.warn('sync: skip device with missing data:', data.id);
+                return;
+            }
             deviceProps['payload']['devices'].push(payload_data(data.id, data.name, data.data));
         });
 
