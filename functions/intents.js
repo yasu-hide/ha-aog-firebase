@@ -45,6 +45,14 @@ const payload_data = (deviceId, deviceNickname, deviceData) => {
     return device_payload;
 };
 
+// リクエスト内の重複を除いた device ID ごとに所有者チェックを並列で1回ずつ行い、id -> boolean の Map を返す
+const checkOwnership = async (uid, ids) => {
+    const distinct = [...new Set(ids)];
+    const groupCache = new Map();
+    const owned = await Promise.all(distinct.map((id) => Model.userOwnsDevice(uid, id, groupCache)));
+    return new Map(distinct.map((id, i) => [id, owned[i]]));
+};
+
 const sync = async (req, res, params = {}) => {
     try {
         const deviceProps = { requestId: req.body?.requestId, payload: { agentUserId: params.uid, devices: [] } };
@@ -64,12 +72,16 @@ const sync = async (req, res, params = {}) => {
     }
 };
 
-const query = async (req, res, _params = {}) => {
+const query = async (req, res, params = {}) => {
     try {
         const deviceStates = { requestId: req.body?.requestId, payload: { devices: {} } };
         const reqStates = req.body?.inputs[0].payload.devices;
 
-        const states = await Promise.all(reqStates.map(reqDevice => Model.getStates(reqDevice.id)));
+        const owned = await checkOwnership(params.uid, reqStates.map(reqDevice => reqDevice.id));
+
+        const states = await Promise.all(reqStates.map(reqDevice => owned.get(reqDevice.id)
+            ? Model.getStates(reqDevice.id)
+            : { id: reqDevice.id, data: { status: 'ERROR', errorCode: 'deviceNotFound' } }));
 
         deviceStates['payload']['devices'] = states.reduce((o, c) => Object.assign(o, { [c.id]: c.data }), {});
         console.log('query:', JSON.stringify(deviceStates));
@@ -79,15 +91,20 @@ const query = async (req, res, _params = {}) => {
     }
 };
 
-const execute = async (req, res, _params = {}) => {
+const execute = async (req, res, params = {}) => {
     try {
         const respCommands = [];
         const reqCommands = req.body?.inputs[0].payload.commands;
         const resPromises = [];
+        const owned = await checkOwnership(params.uid, reqCommands.flatMap((curCommand) => curCommand.devices.map((curDevice) => curDevice.id)));
 
         reqCommands.forEach((curCommand) => {
             curCommand.devices.forEach((curDevice) => {
                 let deviceId = String(curDevice.id);
+                if (!owned.get(curDevice.id)) {
+                    respCommands.push({ ids: [deviceId], status: "ERROR", errorCode: "deviceNotFound" });
+                    return;
+                }
                 let commandsData = [];
                 curCommand.execution.forEach((curExec) => {
                     commandsData.push({ command: curExec.command, params: curExec.params });

@@ -1,6 +1,6 @@
 'use strict';
 
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldPath } = require('firebase-admin/firestore');
 const { getDatabase } = require('firebase-admin/database');
 
 const getFromFirestore = (collection, doc) => {
@@ -130,13 +130,54 @@ Model.setStates = (indivDeviceId, statesData) => {
 };
 
 Model.getGroupDevicesByUserId = async (userId) => {
-    const querysnap = await getFirestore().collection('groups').select(userId).get();
+    // groups ドキュメントはメンバーのユーザーIDを項目名に持つ。select() は射影で絞り込まないため where で絞る。
+    // ユーザーIDに '.' などが含まれても1つの項目名として扱うよう FieldPath を使う。
+    const querysnap = await getFirestore().collection('groups').where(new FieldPath(userId), '!=', null).select().get();
     const groupDevicePromises = [];
     querysnap.forEach((docsnap) => {
         if (docsnap && docsnap.exists)
             groupDevicePromises.push(Model.getGroupDevices(docsnap.id));
     });
     return Promise.all(groupDevicePromises);
+};
+
+// Firestore のドキュメントID / RTDB のキーとして安全に使える ID か ('/' によるパス操作を防ぐ)
+const isSafeId = (id) => typeof id === 'string' && id !== '' && !id.includes('/') && id !== '.' && id !== '..';
+
+// グループ groupId に uid のメンバー項目 (null 以外) があるか。groupCache は groupId -> Promise で、
+// 同一リクエスト内のグループ読み取りを1回にまとめる。
+const isGroupMember = (uid, groupId, groupCache) => {
+    if (!isSafeId(groupId)) {
+        return Promise.resolve(false);
+    }
+    if (!groupCache.has(groupId)) {
+        groupCache.set(groupId, getFromFirestore('groups', groupId).get().then((docsnap) => {
+            if (!docsnap || !docsnap.exists) {
+                return false;
+            }
+            const data = docsnap.data() || {};
+            return Object.prototype.hasOwnProperty.call(data, uid) && data[uid] != null;
+        }));
+    }
+    return groupCache.get(groupId);
+};
+
+// uid のユーザーが deviceId (user_devices / group_devices のドキュメントID) にアクセスできるか。
+Model.userOwnsDevice = async (uid, deviceId, groupCache = new Map()) => {
+    if (!isSafeId(uid) || !isSafeId(deviceId)) {
+        return false;
+    }
+    const [usersnap, groupsnap] = await Promise.all([
+        getFromFirestore('user_devices', deviceId).get(),
+        getFromFirestore('group_devices', deviceId).get()
+    ]);
+    if (usersnap && usersnap.exists && usersnap.data().userId === uid) {
+        return true;
+    }
+    if (groupsnap && groupsnap.exists) {
+        return isGroupMember(uid, groupsnap.data().groupId, groupCache);
+    }
+    return false;
 };
 
 module.exports = Model;
