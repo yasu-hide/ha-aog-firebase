@@ -296,3 +296,48 @@ test("'/token' の Content-Type が無いと 400 invalid_request", async () => {
     assert.strictEqual(r.status, 400);
     assert.strictEqual(JSON.parse(r.body).error, 'invalid_request');
 });
+
+// --- 9. 3.1.1 時代に保存された既存データ ---
+// 保存形式 (refresh_token / access_token / expires_at (ISO 文字列) / client_id / user_id) は移行前後で同じ。
+// 3.1.1 が発行した 40 桁 hex のトークンを直接 seed し、フォークで受理・ローテーションされることを確認する。
+
+const LEGACY_REFRESH = 'a'.repeat(40);
+const LEGACY_ACCESS = 'b'.repeat(40);
+const isoIn = (ms) => new Date(Date.now() + ms).toJSON();
+
+test('3.1.1 時代に保存された refresh token (40桁) で交換でき、新しいトークンにローテーションされる', async () => {
+    fakeDb[`refreshtoken/${LEGACY_REFRESH}`] = {
+        refresh_token: LEGACY_REFRESH,
+        expires_at: isoIn(86400 * 3650 * 1000 - 86400 * 1000),
+        client_id: 'client-id',
+        user_id: 'user-legacy',
+    };
+    const r = await tokenRequest({ grant_type: 'refresh_token', refresh_token: LEGACY_REFRESH });
+    assert.strictEqual(r.status, 200, r.body);
+    const body = JSON.parse(r.body);
+    assert.notStrictEqual(body.refresh_token, LEGACY_REFRESH);
+    assert.strictEqual(fakeDb[`refreshtoken/${LEGACY_REFRESH}`], null);
+    assert.strictEqual(fakeDb[`refreshtoken/${body.refresh_token}`].user_id, 'user-legacy');
+    assert.strictEqual(fakeDb[`accesstoken/${body.access_token}`].user_id, 'user-legacy');
+});
+
+test('3.1.1 時代に保存された access token (40桁) で authenticate を通る', async () => {
+    fakeDb[`accesstoken/${LEGACY_ACCESS}`] = {
+        access_token: LEGACY_ACCESS,
+        expires_at: isoIn(30 * 60 * 1000),
+        client_id: 'client-id',
+        user_id: 'user-legacy',
+    };
+    // 認証を通れば inputs 無しで 400 (missing inputs)、通らなければ 401
+    assert.strictEqual((await authenticated(`Bearer ${LEGACY_ACCESS}`)).status, 400);
+});
+
+test('3.1.1 時代に保存された期限切れ access token は 401', async () => {
+    fakeDb[`accesstoken/${LEGACY_ACCESS}`] = {
+        access_token: LEGACY_ACCESS,
+        expires_at: isoIn(-60 * 1000),
+        client_id: 'client-id',
+        user_id: 'user-legacy',
+    };
+    assert.strictEqual((await authenticated(`Bearer ${LEGACY_ACCESS}`)).status, 401);
+});
