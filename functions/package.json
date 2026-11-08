@@ -5,23 +5,34 @@
   "main": "index.js",
   "private": true,
   "license": "MIT",
+  "engines": {
+    "node": "22"
+  },
   "dependencies": {
-    "body-parser": "latest",
-    "cookie-parser": "latest",
-    "ejs": "latest",
-    "eslint": "^10.0.0",
-    "express": "latest",
-    "firebase-admin": "latest",
-    "firebase-functions": "latest",
-    "firebaseui": "^3.0.0",
-    "node-fetch": "latest",
-    "oauth2-server": "latest",
-    "morgan": "latest",
-    "util": "latest",
-    "@snyk/protect": "latest"
+    "@snyk/protect": "^1.1308.3",
+    "body-parser": "^2.4.0",
+    "cookie-parser": "^1.4.7",
+    "ejs": "^7.0.2",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.2",
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0",
+    "firebaseui": "^3.6.1",
+    "morgan": "^1.12.1",
+    "oauth2-server": "^3.1.1",
+    "util": "^0.12.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "globals": "^14.0.0"
+  },
+  "overrides": {
+    "google-gax": "^6.14.0"
   },
   "scripts": {
     "lint": "eslint",
+    "test": "node --test test/",
     "prepublish": "npm run snyk-protect",
     "snyk-protect": "snyk-protect"
   },

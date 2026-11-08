@@ -1,96 +1,122 @@
 'use strict';
 
-const functions = require('firebase-functions');
-const admin = require("firebase-admin");
+const { getAuth } = require('firebase-admin/auth');
 const OAuth2Server = require("oauth2-server");
 const AuthStore = require("./oauth2_store");
+const { isClientOAuthError, redactForLog, showError } = require('./utils');
 const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+
 const AuthModel = {
-    getAccessToken : (accessToken) => {
-        return AuthStore.getAccessToken(accessToken).then((token) => {
-            return AuthStore.getClient(token.client_id).then((client) => {
-                return {
-                    accessToken: token.access_token,
-                    accessTokenExpiresAt: new Date(token.expires_at),
-                    client: client,
-                    user: { id: token.user_id }
-                };
-            }).catch(console.error);
-        }).catch(console.error);
+    getAccessToken: async (accessToken) => {
+        try {
+            const token = await AuthStore.getAccessToken(accessToken);
+            if (!token) return null;
+            const client = await AuthStore.getClient(token.client_id);
+            if (!client) return null;
+            return {
+                accessToken: token.access_token,
+                accessTokenExpiresAt: new Date(token.expires_at),
+                client: client,
+                user: { id: token.user_id }
+            };
+        } catch (error) {
+            console.error('getAccessToken error:', error);
+            throw error;
+        }
     },
-    getRefreshToken : (refreshToken) => {
-        console.log('getRefreshToken:', refreshToken);
-        return AuthStore.getRefreshToken(refreshToken).then((token) => {
-            return AuthStore.getClient(token.client_id).then((client) => {
-                return {
-                    refreshToken: token.refresh_token,
-                    refreshTokenExpiresAt: new Date(token.expires_at),
-                    client: client,
-                    user: { id: token.user_id }
-                };
-            }).catch(console.error);
-        }).catch(console.error);
+    getRefreshToken: async (refreshToken) => {
+        console.log('getRefreshToken');
+        try {
+            const token = await AuthStore.getRefreshToken(refreshToken);
+            if (!token) return null;
+            const client = await AuthStore.getClient(token.client_id);
+            if (!client) return null;
+            return {
+                refreshToken: token.refresh_token,
+                refreshTokenExpiresAt: new Date(token.expires_at),
+                client: client,
+                user: { id: token.user_id }
+            };
+        } catch (error) {
+            console.error('getRefreshToken error:', error);
+            throw error;
+        }
     },
-    getAuthorizationCode : (authCode) => {
-        console.log('getAuthorizationCode:', authCode);
-        return AuthStore.getAuthorizationCode(authCode).then((code) => {
-            return AuthStore.getClient(code.client_id).then((client) => {
-                return {
-                    code: code.authorization_code,
-                    expiresAt: new Date(code.expires_at),
-                    redirectUri: code.redirect_uri,
-                    client: client,
-                    user: { id: code.user_id }
-                };
-            }).catch(console.error);
-        }).catch(console.error);
+    getAuthorizationCode: async (authCode) => {
+        console.log('getAuthorizationCode');
+        try {
+            const code = await AuthStore.getAuthorizationCode(authCode);
+            if (!code) return null;
+            const client = await AuthStore.getClient(code.client_id);
+            if (!client) return null;
+            return {
+                code: code.authorization_code,
+                expiresAt: new Date(code.expires_at),
+                redirectUri: code.redirect_uri,
+                client: client,
+                user: { id: code.user_id }
+            };
+        } catch (error) {
+            console.error('getAuthorizationCode error:', error);
+            throw error;
+        }
     },
-    getClient : (clientId, clientSecret) => {
-        console.log('getClient:', clientId, clientSecret);
-        return AuthStore.getClient(clientId, clientSecret).then((client) => {
+    getClient: async (clientId, clientSecret) => {
+        console.log('getClient:', clientId);
+        try {
+            const client = await AuthStore.getClient(clientId, clientSecret);
+            if (!client) return null;
             return {
                 id: client.id,
                 redirectUris: client.redirect_uris,
                 grants: client.grants
             };
-        }).catch(console.error);
+        } catch (error) {
+            console.error('getClient error:', error);
+            throw error;
+        }
     },
-    saveToken : (token, client, user) => {
-        console.log('saveToken:', token, client, user);
-        const access_token = AuthStore.setAccessTokens(token.accessToken, {
-            access_token: token.accessToken,
-            expires_at: new Date(token.accessTokenExpiresAt).toJSON(),
-            client_id: client.id,
-            user_id: user.id,
-        });
-        const refresh_token = AuthStore.setRefreshToken(token.refreshToken, {
-            refresh_token: token.refreshToken,
-            expires_at: new Date(token.refreshTokenExpiresAt).toJSON(),
-            client_id: client.id,
-            user_id: user.id
-        });
-        return access_token.then((accessToken) => {
-            return refresh_token.then((refreshToken) => {
-                return {
-                    accessToken: accessToken.access_token,
-                    accessTokenExpiresAt: new Date(accessToken.expires_at),
-                    refreshToken: refreshToken.refresh_token,
-                    refreshTokenExpiresAt: new Date(refreshToken.expires_at),
-                    client: { id: accessToken.client_id },
-                    user: { id: accessToken.user_id }
-                };
-            }).catch(console.error);
-        }).catch(console.error);
+    saveToken: async (token, client, user) => {
+        console.log('saveToken:', client?.id, user?.id);
+        try {
+            const accessTokenPromise = AuthStore.setAccessTokens(token.accessToken, {
+                access_token: token.accessToken,
+                expires_at: new Date(token.accessTokenExpiresAt).toJSON(),
+                client_id: client.id,
+                user_id: user.id,
+            });
+            const refreshTokenPromise = AuthStore.setRefreshToken(token.refreshToken, {
+                refresh_token: token.refreshToken,
+                expires_at: new Date(token.refreshTokenExpiresAt).toJSON(),
+                client_id: client.id,
+                user_id: user.id
+            });
+
+            const [accessToken, refreshToken] = await Promise.all([accessTokenPromise, refreshTokenPromise]);
+
+            return {
+                accessToken: accessToken.access_token,
+                accessTokenExpiresAt: new Date(accessToken.expires_at),
+                refreshToken: refreshToken.refresh_token,
+                refreshTokenExpiresAt: new Date(refreshToken.expires_at),
+                client: { id: accessToken.client_id },
+                user: { id: accessToken.user_id }
+            };
+        } catch (error) {
+            console.error('saveToken error:', error);
+            throw error;
+        }
     },
-    saveAuthorizationCode : (code, client, user) => {
-        console.log('saveAuthorizationCode:', code, client, user);
-        return AuthStore.setAuthCode(code.authorizationCode, {
-            authorization_code: code.authorizationCode,
-            expires_at: new Date(code.expiresAt).toJSON(),
-            redirect_uri: code.redirectUri,
-            client_id: client.id,
-            user_id: user.id
-        }).then((authorizationCode) => {
+    saveAuthorizationCode: async (code, client, user) => {
+        console.log('saveAuthorizationCode:', client?.id, user?.id);
+        try {
+            const authorizationCode = await AuthStore.setAuthCode(code.authorizationCode, {
+                authorization_code: code.authorizationCode,
+                expires_at: new Date(code.expiresAt).toJSON(),
+                redirect_uri: code.redirectUri,
+                client_id: client.id,
+                user_id: user.id
+            });
             return {
                 authorizationCode: authorizationCode.authorization_code,
                 expiresAt: new Date(authorizationCode.expires_at),
@@ -98,51 +124,87 @@ const AuthModel = {
                 client: { id: authorizationCode.client_id },
                 user: { id: authorizationCode.user_id }
             };
-        }).catch(console.error);
+        } catch (error) {
+            console.error('saveAuthorizationCode error:', error);
+            throw error;
+        }
     },
-    revokeToken : (token) => {
-        console.log('revokeToken:', token);
-        return AuthStore.unsetRefreshToken(token.refreshToken).then((refreshToken) => {
+    revokeToken: async (token) => {
+        console.log('revokeToken:', token?.client?.id, token?.user?.id);
+        try {
+            await AuthStore.unsetRefreshToken(token.refreshToken);
             return true;
-        }).catch(console.error);
+        } catch (error) {
+            console.error('revokeToken error:', error);
+            throw error;
+        }
     },
-    revokeAuthorizationCode : (code) => {
-        console.log('revokeAuthorizationCode:', code);
-        return AuthStore.unsetAuthCode(code.code).then((authorizationCode) => {
+    revokeAuthorizationCode: async (code) => {
+        console.log('revokeAuthorizationCode:', code?.client?.id, code?.user?.id);
+        try {
+            await AuthStore.unsetAuthCode(code.code);
             return true;
-        }).catch(console.error);
+        } catch (error) {
+            console.error('revokeAuthorizationCode error:', error);
+            throw error;
+        }
     }
 };
+
 const oauth = new OAuth2Server({ model: AuthModel });
 
-exports.auth = (req, res, next) => {
-    console.info('/auth query', req.query);
-    console.info('/auth body', req.body);
-    const client_id = (req.query.client_id || req.body.client_id);
-    const redirect_uri = (req.query.redirect_uri || req.body.redirect_uri);
-    const state = (req.query.state || req.body.state);
+exports.auth = async (req, res, _next) => {
+    console.info('/auth query', redactForLog(req.query));
+    console.info('/auth body', redactForLog(req.body));
+    const state = (req.query?.state || req.body?.state);
     const bearer = req.headers.authorization;
-    if(bearer && bearer.startsWith('Bearer ')) {
+
+    if (bearer && bearer.startsWith('Bearer ')) {
         const idToken = bearer.split('Bearer ')[1];
         delete req.headers.authorization;
-        return admin.auth().verifyIdToken(idToken).then((decodedIdToken) => {
-            const options = { authenticateHandler: { handle: (data) => { return { id: decodedIdToken.sub } } } };
-            const request = new OAuth2Server.Request(req);
-            const response = new OAuth2Server.Response(res);
-            oauth.authorize(request, response, options).then((authcode) => {
-                res.status(200).send(authcode.authorizationCode);
-                return;
-            }).catch((error) => {
-                console.error(error);
-                res.status(401).json({ error: "invalid_request", description: error });
-                return;
-            });
-            return;
-        }).catch((error) => {
-            console.error('Error while verifying Firebase ID token:', error);
+        let decodedIdToken;
+        try {
+            decodedIdToken = await getAuth().verifyIdToken(idToken);
+        } catch (error) {
+            console.error('Auth verify error:', error);
             res.status(401).json({ error: "invalid_request", description: 'Unauthorized' });
             return;
-        });
+        }
+        try {
+            const options = { authenticateHandler: { handle: () => ({ id: decodedIdToken.sub }) } };
+            const request = new OAuth2Server.Request(req);
+            const response = new OAuth2Server.Response(res);
+            const authcode = await oauth.authorize(request, response, options);
+            res.status(200).send(authcode.authorizationCode);
+            return;
+        } catch (error) {
+            console.error('Auth authorize error:', error);
+            const description = isClientOAuthError(error) ? error.message : 'invalid_request';
+            res.status(401).json({ error: "invalid_request", description: description });
+            return;
+        }
+    }
+    // login.ejs は redirect_uri をそのまま遷移先に使うため、画面を出す前に登録済みの値と照合する。
+    const clientId = req.query?.client_id ?? req.body?.client_id;
+    const requestedUri = req.query?.redirect_uri ?? req.body?.redirect_uri;
+    const invalidRequest = () => res.status(400).json({ error: 'invalid_request', description: 'invalid client_id or redirect_uri' });
+    if (typeof clientId !== 'string' || clientId === '' ||
+        (requestedUri !== undefined && requestedUri !== null && typeof requestedUri !== 'string')) {
+        return invalidRequest();
+    }
+    let client;
+    try {
+        client = await AuthStore.getClient(clientId);
+    } catch (error) {
+        return showError(res, error);
+    }
+    if (!client) {
+        return invalidRequest();
+    }
+    // 未指定・空は oauth2-server の getRedirectUri と同様に先頭の登録済み URI を使う。
+    const redirect_uri = requestedUri ? requestedUri : client.redirect_uris[0];
+    if (!client.redirect_uris.includes(redirect_uri)) {
+        return invalidRequest();
     }
     return res.render('login', {
         config: firebaseConfig,
@@ -150,24 +212,26 @@ exports.auth = (req, res, next) => {
         state: state
     });
 };
-exports.token = (req, res, next) => {
-    console.info('/token query', req.query);
-    console.info('/token body', req.body);
+
+exports.token = async (req, res, _next) => {
+    console.info('/token query', redactForLog(req.query));
+    console.info('/token body', redactForLog(req.body));
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
     // refresh token will expire in 10 years.
     const options = { refreshTokenLifetime: 86400 * 3650 };
-    oauth.token(request, response, options).then((token) => {
+    try {
+        await oauth.token(request, response, options);
         res.set(response.headers);
         res.status(response.status).send(response.body);
-        return;
-    }).catch((error) =>{
-        console.error(error);
-        if(response) {
+    } catch (error) {
+        console.error('Token error:', error);
+        if (response) {
             res.set(response.headers);
         }
-        res.status(400).send({ error: "invalid_request", description: error });
-        return;
-    });
+        const description = isClientOAuthError(error) ? error.message : 'invalid_request';
+        res.status(400).send({ error: "invalid_request", description: description });
+    }
 };
+
 exports.AuthModel = AuthModel;
