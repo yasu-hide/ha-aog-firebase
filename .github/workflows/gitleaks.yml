@@ -1,0 +1,26 @@
+name: gitleaks
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * *" # run once a day at 4 AM
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitleaks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

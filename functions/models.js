@@ -14,7 +14,7 @@ const getFromDatabase = (refkey, pkey) => {
 const Model = {};
 
 const getPersonalDevices = async (personal, personalId) => {
-    let personalId_key = undefined;
+    let personalId_key;
     switch (personal) {
         case "group_devices":
             personalId_key = 'groupId';

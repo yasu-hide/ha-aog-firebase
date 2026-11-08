@@ -23,8 +23,8 @@
     "util": "^0.12.5"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
-    "eslint": "^9.39.5",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
     "globals": "^14.0.0"
   },
   "scripts": {
