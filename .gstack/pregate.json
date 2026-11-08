@@ -1,0 +1,60 @@
+{
+  "$schema": "https://github.com/garrytan/gstack/docs/pregate.md#pregate-v1",
+  "runner": null,
+  "dependencies": {
+    "functions/.env.example": [
+      "functions/test/auth-redirect.test.js",
+      "functions/test/errors.test.js",
+      "functions/test/load.test.js",
+      "functions/test/logging.test.js",
+      "functions/test/ownership.test.js",
+      "functions/test/server.test.js"
+    ],
+    "functions/.snyk": [
+      "functions/test/auth-redirect.test.js",
+      "functions/test/errors.test.js",
+      "functions/test/load.test.js",
+      "functions/test/logging.test.js",
+      "functions/test/ownership.test.js",
+      "functions/test/server.test.js"
+    ],
+    "functions/eslint.config.js": [
+      "functions/test/auth-redirect.test.js",
+      "functions/test/errors.test.js",
+      "functions/test/load.test.js",
+      "functions/test/logging.test.js",
+      "functions/test/ownership.test.js",
+      "functions/test/server.test.js"
+    ],
+    "functions/package-lock.json": [
+      "functions/test/auth-redirect.test.js",
+      "functions/test/errors.test.js",
+      "functions/test/load.test.js",
+      "functions/test/logging.test.js",
+      "functions/test/ownership.test.js",
+      "functions/test/server.test.js"
+    ],
+    "functions/package.json": [
+      "functions/test/auth-redirect.test.js",
+      "functions/test/errors.test.js",
+      "functions/test/load.test.js",
+      "functions/test/logging.test.js",
+      "functions/test/ownership.test.js",
+      "functions/test/server.test.js"
+    ],
+    "functions/views/login.ejs": [
+      "functions/test/auth-redirect.test.js",
+      "functions/test/errors.test.js",
+      "functions/test/load.test.js",
+      "functions/test/logging.test.js",
+      "functions/test/ownership.test.js",
+      "functions/test/server.test.js"
+    ]
+  },
+  "empty_lanes": [],
+  "selection": {},
+  "warn": [],
+  "strays": {
+    "allow": []
+  }
+}
