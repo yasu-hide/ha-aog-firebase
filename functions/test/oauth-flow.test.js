@@ -232,10 +232,10 @@ test('code_verifier を含む token リクエストは 400 invalid_request (code
 
 test("POST '/auth' は code_challenge / code_challenge_method を受理するが、認可コードと一緒に保存しない", async () => {
     // 3.1.1 behavior; fork may differ (plan 差異1): oauth2.js の saveAuthorizationCode は固定フィールドのみ保存する。
-    const code = await issueCode({ code_challenge: 'abc', code_challenge_method: 'S256' });
+    const code = await issueCode({ code_challenge: 'challenge-xyz', code_challenge_method: 'S256' });
     assert.deepStrictEqual(Object.keys(fakeDb[`authcode/${code}`]).sort(),
         ['authorization_code', 'client_id', 'expires_at', 'redirect_uri', 'user_id']);
-    assert.ok(!JSON.stringify(fakeDb[`authcode/${code}`]).includes('abc'));
+    assert.ok(!JSON.stringify(fakeDb[`authcode/${code}`]).includes('challenge-xyz'));
 });
 
 // --- 8. パラメータ・ヘッダの変種 ---
