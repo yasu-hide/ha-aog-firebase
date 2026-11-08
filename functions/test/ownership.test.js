@@ -194,3 +194,41 @@ test('execute/query: 同じ ID の所有者チェックはリクエスト内で1
     assert.strictEqual(countOf('groups/gB'), 1);
     assert.strictEqual(rtdb.reads.length, 0);
 });
+
+test('userOwnsDevice: Firestore 予約 ID (__x__) と 1500 バイト超の ID は false で Firestore を読まない', async () => {
+    for (const id of ['__name__', '__a__', 'x'.repeat(1501), 'あ'.repeat(501)]) {
+        assert.strictEqual(await Model.userOwnsDevice('userA', id), false, id.slice(0, 20));
+    }
+    assert.deepStrictEqual(gets, []);
+    // 境界: ちょうど 1500 バイトは安全な ID として読みに行く
+    assert.strictEqual(await Model.userOwnsDevice('userA', 'x'.repeat(1500)), false);
+    assert.strictEqual(gets.length, 2);
+});
+
+test('execute/query: 所有 ID が "123" でも数値 123・オブジェクト ID は deviceNotFound (書込・RTDB 読取なし)', async () => {
+    docs.set('user_devices/123', { userId: 'userA', deviceId: 'dev1', remoteId: 'r1' });
+    for (const id of [123, { a: 1 }]) {
+        rtdb.sets.length = 0;
+        rtdb.reads.length = 0;
+        const eres = fakeRes();
+        await quiet(() => intents.execute({ body: { requestId: 'r', inputs: [{ payload: { commands: [{ devices: [{ id }], execution: [{ command: 'c', params: {} }] }] } }] } }, eres, { uid: 'userA' }));
+        assert.deepStrictEqual(eres.body.payload.commands, [{ ids: [String(id)], status: 'ERROR', errorCode: 'deviceNotFound' }]);
+        const qres = fakeRes();
+        await quiet(() => intents.query({ body: { requestId: 'r', inputs: [{ payload: { devices: [{ id }] } }] } }, qres, { uid: 'userA' }));
+        assert.deepStrictEqual(qres.body.payload.devices, { [String(id)]: { status: 'ERROR', errorCode: 'deviceNotFound' } });
+        assert.deepStrictEqual(rtdb.sets, []);
+        assert.deepStrictEqual(rtdb.reads, []);
+    }
+});
+
+test('execute/query: inputs が [null] の不正ボディでも intents 内で TypeError を投げず制御されたエラーを返す', async () => {
+    for (const fn of [intents.execute, intents.query]) {
+        const res = fakeRes();
+        const origErr = console.error;
+        console.error = () => {};
+        try {
+            await quiet(() => fn({ body: { inputs: [null] } }, res, { uid: 'userA' }));
+        } finally { console.error = origErr; }
+        assert.ok(res.statusCode >= 400, `status ${res.statusCode}`);
+    }
+});

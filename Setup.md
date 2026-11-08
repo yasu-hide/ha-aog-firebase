@@ -61,6 +61,7 @@ bower install firebaseui --save
 ```
 - OAuth資格情報を生成し設定
     - `functions/.env.example`を`functions/.env.<projectId>`にコピーし、`OAUTH_CLIENT_ID`（作成した`ClientId`）と`HOMEGRAPH_API_KEY`を設定
+    - `HOMEGRAPH_API_KEY`にはプロジェクトのWeb APIキー（またはHomeGraph APIを有効にしたキー）を設定する。従来`functions.config().firebase.apiKey`としてFirebaseが自動で渡していた値で、`firebase functions:config:export`では引き継がれない
     - `ClientSecret`を作成し、`firebase functions:secrets:set OAUTH_CLIENT_SECRET`で設定
     - 既存の`functions:config`の値は自動では引き継がれないため手作業で移し替える（`firebase functions:config:export`が参考になる）
 

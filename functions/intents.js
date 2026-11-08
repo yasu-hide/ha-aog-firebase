@@ -75,7 +75,7 @@ const sync = async (req, res, params = {}) => {
 const query = async (req, res, params = {}) => {
     try {
         const deviceStates = { requestId: req.body?.requestId, payload: { devices: {} } };
-        const reqStates = req.body?.inputs[0].payload.devices;
+        const reqStates = req.body?.inputs?.[0]?.payload?.devices;
 
         const owned = await checkOwnership(params.uid, reqStates.map(reqDevice => reqDevice.id));
 
@@ -94,7 +94,7 @@ const query = async (req, res, params = {}) => {
 const execute = async (req, res, params = {}) => {
     try {
         const respCommands = [];
-        const reqCommands = req.body?.inputs[0].payload.commands;
+        const reqCommands = req.body?.inputs?.[0]?.payload?.commands;
         const resPromises = [];
         const owned = await checkOwnership(params.uid, reqCommands.flatMap((curCommand) => curCommand.devices.map((curDevice) => curDevice.id)));
 

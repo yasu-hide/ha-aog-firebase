@@ -65,7 +65,8 @@ exports.getClient = async (client_id, client_secret) => {
         return null;
     }
     const clientSecret = app_clientSecret();
-    if (client_secret && !safeEqual(client_secret, clientSecret)) {
+    // 配列・オブジェクト (extended urlencoded) を String() で一致させないよう、文字列のみ比較する。
+    if (client_secret && (typeof client_secret !== 'string' || !safeEqual(client_secret, clientSecret))) {
         console.error('mismatch client secret');
         return null;
     }

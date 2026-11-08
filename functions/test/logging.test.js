@@ -180,6 +180,12 @@ test('redactForLog: オブジェクト以外はそのまま返す', () => {
     assert.deepStrictEqual(redactForLog([{ token: 'x' }]), [{ token: '[REDACTED]' }]);
 });
 
+test('store.getClient: 配列・オブジェクトの secret (extended urlencoded) は一致しても null', async () => {
+    for (const s of [[CONF_SECRET], { a: CONF_SECRET }, 123, true]) {
+        assert.strictEqual(await AuthStore.getClient('client-id', s), null, JSON.stringify(s));
+    }
+});
+
 // --- app.js / oauth2.js のリクエストログ ---
 
 const fakeRes = () => {
@@ -198,12 +204,13 @@ test("app.root: 'Auth OK' はユーザーIDのみでアクセストークンを�
         method: 'POST',
         headers: { authorization: 'Bearer SENTINEL-ACCESS-TOKEN', 'content-type': 'application/json' },
         query: {},
-        body: { inputs: [] },
+        body: { inputs: [], refresh_token: 'SENTINEL-REFRESH-TOKEN' },
     };
     const res = fakeRes();
     await noLeak(() => app.root(req, res));
     assert.strictEqual(res.statusCode, 400);
     assert.ok(captured.some((l) => l.includes('Auth OK') && l.includes('user-42')), captured.join('\n'));
+    assert.ok(captured.some((l) => l.includes('[REDACTED]')), captured.join('\n'));
 });
 
 test('app.requestsync / reportstate: query/body のアクセストークンを伏せる', async () => {
@@ -217,6 +224,7 @@ test('app.requestsync / reportstate: query/body のアクセストークンを�
         // 認証は失敗させる (トークン未登録) — ログ出力のみ確認
         AuthStore.getAccessToken = async () => null;
         await noLeak(() => handler(req, fakeRes()));
+        assert.ok(captured.some((l) => l.includes('[REDACTED]')), captured.join('\n'));
     }
 });
 
@@ -228,5 +236,7 @@ test('oauth2.token / auth: query/body の secret・コード・トークンを�
     };
     AuthStore.getRefreshToken = async () => null;
     await noLeak(() => token({ method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, query: { ...body }, body: { ...body } }, fakeRes()));
+    assert.ok(captured.some((l) => l.includes('[REDACTED]')), captured.join('\n'));
     await noLeak(() => auth({ method: 'GET', headers: {}, query: { ...body }, body: { ...body } }, fakeRes()));
+    assert.ok(captured.some((l) => l.includes('[REDACTED]')), captured.join('\n'));
 });

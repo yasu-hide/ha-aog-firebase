@@ -142,7 +142,9 @@ Model.getGroupDevicesByUserId = async (userId) => {
 };
 
 // Firestore のドキュメントID / RTDB のキーとして安全に使える ID か ('/' によるパス操作を防ぐ)
-const isSafeId = (id) => typeof id === 'string' && id !== '' && !id.includes('/') && id !== '.' && id !== '..';
+// Firestore 予約 ID (__.*__) と 1500 バイト超の ID も拒否する (500 ではなく未所有として扱う)
+const isSafeId = (id) => typeof id === 'string' && id !== '' && !id.includes('/') && id !== '.' && id !== '..'
+    && !/^__.*__$/.test(id) && Buffer.byteLength(id) <= 1500;
 
 // グループ groupId に uid のメンバー項目 (null 以外) があるか。groupCache は groupId -> Promise で、
 // 同一リクエスト内のグループ読み取りを1回にまとめる。
