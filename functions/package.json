@@ -9,6 +9,7 @@
     "node": "24"
   },
   "dependencies": {
+    "@node-oauth/oauth2-server": "5.3.1",
     "@snyk/protect": "^1.1308.3",
     "body-parser": "^2.4.0",
     "cookie-parser": "^1.4.7",
@@ -18,7 +19,6 @@
     "firebase-admin": "^14.5.0",
     "firebase-functions": "^7.4.0",
     "morgan": "^1.12.1",
-    "oauth2-server": "^3.1.1",
     "util": "^0.12.5"
   },
   "devDependencies": {
@@ -28,7 +28,6 @@
   },
   "overrides": {
     "google-gax": "^6.14.0",
-    "lodash": "^4.18.1",
     "minimatch": "^11.0.1"
   },
   "scripts": {

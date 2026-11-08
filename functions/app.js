@@ -1,6 +1,6 @@
 'use strict';
 
-const OAuth2Server = require("oauth2-server");
+const OAuth2Server = require("@node-oauth/oauth2-server");
 const { HOMEGRAPH_API_KEY } = require('./params');
 const { showError, redactForLog } = require('./utils');
 const { sync, query, execute } = require('./intents');

@@ -18,7 +18,7 @@ const mute = () => { console.log = console.info = console.error = console.warn =
 const unmute = () => Object.assign(console, savedConsole);
 
 mute();
-const OAuth2Server = require('oauth2-server');
+const OAuth2Server = require('@node-oauth/oauth2-server');
 const AuthStore = require('../oauth2_store');
 const { AuthModel } = require('../oauth2');
 const { showError } = require('../utils');
