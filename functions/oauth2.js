@@ -229,8 +229,11 @@ exports.token = async (req, res, _next) => {
         if (response) {
             res.set(response.headers);
         }
-        const description = isClientOAuthError(error) ? error.message : 'invalid_request';
-        res.status(400).send({ error: "invalid_request", description: description });
+        if (isClientOAuthError(error)) {
+            res.status(error.code).send({ error: error.name, description: error.message });
+        } else {
+            res.status(500).send({ error: 'server_error', description: 'internal_error' });
+        }
     }
 };
 
