@@ -1,7 +1,7 @@
 'use strict';
 
 const Model = require('./models');
-const { valuniq, flatten, showError } = require('./utils');
+const { showError } = require('./utils');
 
 const payload_data = (deviceId, deviceNickname, deviceData) => {
     const deviceType = deviceData.type;
@@ -53,7 +53,7 @@ const sync = async (req, res, params = {}) => {
             Model.getUserDevices(params.uid)
         ]);
 
-        valuniq(flatten(deviceData)).forEach((data) => {
+        [...new Map(deviceData.flat(Infinity).map((d) => [d.id, d])).values()].forEach((data) => {
             // 参照切れのデバイスは除外し、1 台のために SYNC 全体が失敗しないようにする
             if (data.data == null) {
                 console.warn('sync: skip device with missing data:', data.id);
