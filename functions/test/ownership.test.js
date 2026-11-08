@@ -50,8 +50,19 @@ require('firebase-admin/database').getDatabase = () => ({
     }),
 });
 
+// app.js (params 経由) が参照する環境変数
+process.env.FIREBASE_CONFIG = JSON.stringify({
+    projectId: 'p',
+    databaseURL: 'https://p-default-rtdb.firebaseio.com'
+});
+process.env.OAUTH_CLIENT_ID = 'client-id';
+process.env.OAUTH_CLIENT_SECRET = 'client-secret';
+process.env.HOMEGRAPH_API_KEY = 'api-key';
+
 const Model = require('../models');
 const intents = require('../intents');
+const AuthStore = require('../oauth2_store');
+const app = require('../app');
 
 const savedLog = console.log;
 const quiet = async (fn) => { console.log = () => {}; try { return await fn(); } finally { console.log = savedLog; } };
@@ -231,4 +242,75 @@ test('execute/query: inputs が [null] の不正ボディでも intents 内で T
         } finally { console.error = origErr; }
         assert.ok(res.statusCode >= 400, `status ${res.statusCode}`);
     }
+});
+
+// --- reportstate: 所有していない device ID を Home Graph へ転送しない ---
+
+const originalStore = { ...AuthStore };
+const originalFetch = global.fetch;
+let fetchBodies = [];
+test.beforeEach(() => {
+    fetchBodies = [];
+    AuthStore.getAccessToken = async () => ({ access_token: 'tok', expires_at: new Date(Date.now() + 3600 * 1000).toJSON(), client_id: 'client-id', user_id: 'userA' });
+    global.fetch = async (url, options) => {
+        fetchBodies.push(JSON.parse(options.body));
+        return { status: 200, statusText: 'OK' };
+    };
+});
+test.afterEach(() => {
+    Object.assign(AuthStore, originalStore);
+    global.fetch = originalFetch;
+});
+
+const reportReq = (devices) => ({
+    method: 'POST',
+    headers: { authorization: 'Bearer tok', 'content-type': 'application/json' },
+    query: {},
+    body: { devices },
+});
+const runReport = async (devices) => {
+    const res = fakeRes();
+    const origErr = console.error;
+    console.error = () => {};
+    try { await quiet(() => app.reportstate(reportReq(devices), res)); } finally { console.error = origErr; }
+    return res;
+};
+
+test('reportstate: 所有している ID のみなら全て転送する', async () => {
+    const devices = { states: { udA: { on: true }, gdA: { on: true } }, notifications: { udA: { n: 1 } } };
+    const res = await runReport(devices);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(fetchBodies.length, 1);
+    assert.deepStrictEqual(fetchBodies[0].devices, devices);
+    assert.strictEqual(fetchBodies[0].agentUserId, 'userA');
+});
+
+test('reportstate: states の他人の ID は除外して所有分だけ転送する', async () => {
+    const res = await runReport({ states: { udA: { on: true }, udB: { on: false } } });
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(fetchBodies.length, 1);
+    assert.deepStrictEqual(Object.keys(fetchBodies[0].devices.states), ['udA']);
+});
+
+test('reportstate: notifications の他人の ID も除外する', async () => {
+    const res = await runReport({ states: { udA: { on: true } }, notifications: { udA: { n: 1 }, gdB: { n: 2 } } });
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(fetchBodies.length, 1);
+    assert.deepStrictEqual(Object.keys(fetchBodies[0].devices.notifications), ['udA']);
+    assert.deepStrictEqual(Object.keys(fetchBodies[0].devices.states), ['udA']);
+});
+
+test('reportstate: 全て他人の ID なら fetch せず 200 を返す', async () => {
+    const res = await runReport({ states: { udB: { on: true } }, notifications: { gdB: { n: 1 } } });
+    assert.strictEqual(res.statusCode, 200);
+    assert.deepStrictEqual(res.body, { status: 'OK' });
+    assert.strictEqual(fetchBodies.length, 0);
+});
+
+test('reportstate: devices がオブジェクトでなければ 400', async () => {
+    for (const devices of [[], 'udA', 123, true]) {
+        const res = await runReport(devices);
+        assert.strictEqual(res.statusCode, 400, JSON.stringify(devices));
+    }
+    assert.strictEqual(fetchBodies.length, 0);
 });

@@ -45,14 +45,6 @@ const payload_data = (deviceId, deviceNickname, deviceData) => {
     return device_payload;
 };
 
-// リクエスト内の重複を除いた device ID ごとに所有者チェックを並列で1回ずつ行い、id -> boolean の Map を返す
-const checkOwnership = async (uid, ids) => {
-    const distinct = [...new Set(ids)];
-    const groupCache = new Map();
-    const owned = await Promise.all(distinct.map((id) => Model.userOwnsDevice(uid, id, groupCache)));
-    return new Map(distinct.map((id, i) => [id, owned[i]]));
-};
-
 const sync = async (req, res, params = {}) => {
     try {
         const deviceProps = { requestId: req.body?.requestId, payload: { agentUserId: params.uid, devices: [] } };
@@ -77,7 +69,7 @@ const query = async (req, res, params = {}) => {
         const deviceStates = { requestId: req.body?.requestId, payload: { devices: {} } };
         const reqStates = req.body?.inputs?.[0]?.payload?.devices;
 
-        const owned = await checkOwnership(params.uid, reqStates.map(reqDevice => reqDevice.id));
+        const owned = await Model.checkOwnership(params.uid, reqStates.map(reqDevice => reqDevice.id));
 
         const states = await Promise.all(reqStates.map(reqDevice => owned.get(reqDevice.id)
             ? Model.getStates(reqDevice.id)
@@ -96,7 +88,7 @@ const execute = async (req, res, params = {}) => {
         const respCommands = [];
         const reqCommands = req.body?.inputs?.[0]?.payload?.commands;
         const resPromises = [];
-        const owned = await checkOwnership(params.uid, reqCommands.flatMap((curCommand) => curCommand.devices.map((curDevice) => curDevice.id)));
+        const owned = await Model.checkOwnership(params.uid, reqCommands.flatMap((curCommand) => curCommand.devices.map((curDevice) => curDevice.id)));
 
         reqCommands.forEach((curCommand) => {
             curCommand.devices.forEach((curDevice) => {

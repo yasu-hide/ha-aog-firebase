@@ -182,4 +182,12 @@ Model.userOwnsDevice = async (uid, deviceId, groupCache = new Map()) => {
     return false;
 };
 
+// リクエスト内の重複を除いた device ID ごとに所有者チェックを並列で1回ずつ行い、id -> boolean の Map を返す
+Model.checkOwnership = async (uid, ids) => {
+    const distinct = [...new Set(ids)];
+    const groupCache = new Map();
+    const owned = await Promise.all(distinct.map((id) => Model.userOwnsDevice(uid, id, groupCache)));
+    return new Map(distinct.map((id, i) => [id, owned[i]]));
+};
+
 module.exports = Model;

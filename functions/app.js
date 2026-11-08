@@ -4,6 +4,7 @@ const OAuth2Server = require("oauth2-server");
 const { HOMEGRAPH_API_KEY } = require('./params');
 const { showError, redactForLog } = require('./utils');
 const { sync, query, execute } = require('./intents');
+const Model = require('./models');
 
 const requestSyncEndpoint = 'https://homegraph.googleapis.com/v1/devices:requestSync?key=';
 const reportStateEndpoint = 'https://homegraph.googleapis.com/v1/devices?key=';
@@ -49,13 +50,28 @@ exports.reportstate = async (req, res) => {
     try {
         const auth = await oauth.authenticate(request, response);
         console.info('Auth OK', auth.user.id);
-        if (!req.body?.devices) {
+        const reqDevices = req.body?.devices;
+        if (!reqDevices || typeof reqDevices !== 'object' || Array.isArray(reqDevices)) {
             throw new SyntaxError('devices required');
+        }
+        // 所有していない device ID を states / notifications から除外する
+        const owned = await Model.checkOwnership(auth.user.id, [
+            ...Object.keys(reqDevices.states ?? {}),
+            ...Object.keys(reqDevices.notifications ?? {})
+        ]);
+        const devices = { ...reqDevices };
+        for (const key of ['states', 'notifications']) {
+            if (reqDevices[key] && typeof reqDevices[key] === 'object') {
+                devices[key] = Object.fromEntries(Object.entries(reqDevices[key]).filter(([id]) => owned.get(id)));
+            }
+        }
+        if (Object.keys(devices.states ?? {}).length === 0 && Object.keys(devices.notifications ?? {}).length === 0) {
+            return res.status(200).json({ status: 'OK' });
         }
         options.body = JSON.stringify({
             agentUserId: auth.user.id,
             requestId: 'request-' + Math.random(),
-            devices: req.body?.devices
+            devices
         });
         const fetchRes = await fetch(reportStateEndpoint + apiKey, options);
         console.log('report-state:', fetchRes.status, fetchRes.statusText);
