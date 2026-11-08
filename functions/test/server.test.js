@@ -105,3 +105,28 @@ test("'/token' は105回目でも 429 にならない", async () => {
     const codes = await hit('POST', '/token', '66.249.84.3', 105);
     assert.ok(!codes.includes(429));
 });
+
+// morgan のアクセスログにクエリ文字列 (access_token など) を出さない
+test('morgan: アクセスログのパスにクエリ文字列を含めない', async () => {
+    const lines = [];
+    const origWrite = process.stdout.write;
+    const saved = { log: console.log, info: console.info, error: console.error, warn: console.warn };
+    console.log = console.info = console.error = console.warn = () => {};
+    process.stdout.write = function (chunk, ...rest) {
+        if (/(GET|POST) \//.test(String(chunk))) { lines.push(String(chunk)); return true; }
+        return origWrite.call(this, chunk, ...rest);
+    };
+    try {
+        await new Promise((resolve, reject) => {
+            http.get({ host: '127.0.0.1', port, path: '/auth?access_token=SECRET-QS&x=1', headers: { 'x-forwarded-for': '198.51.100.7' } },
+                (res) => { res.resume(); res.on('end', resolve); }).on('error', reject);
+        });
+        await new Promise((r) => setTimeout(r, 50));
+    } finally {
+        process.stdout.write = origWrite;
+        Object.assign(console, saved);
+    }
+    const out = lines.join('');
+    assert.ok(out.includes('GET /auth'), out);
+    assert.ok(!out.includes('SECRET-QS') && !out.includes('?'), out);
+});
