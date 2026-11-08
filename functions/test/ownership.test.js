@@ -115,6 +115,27 @@ test('sync: ユーザー A の SYNC に B のデバイス・グループデバ�
     assert.deepStrictEqual(res.body.payload.devices.map((d) => d.id).sort(), ['gdA', 'udA']);
 });
 
+test('sync: 参照切れのデバイス (deviceId / deviceReference) があっても 200 で正常分だけ返す', async () => {
+    docs.set('user_devices/udGoneId', { userId: 'userA', deviceId: 'devGone', name: 'gone by id' });
+    docs.set('user_devices/udGoneRef', {
+        userId: 'userA',
+        deviceReference: { get: async () => ({ exists: false, data: () => undefined }) },
+        name: 'gone by ref'
+    });
+    const res = fakeRes();
+    const warns = [];
+    const savedWarn = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try {
+        await quiet(() => intents.sync({ body: { requestId: 'r1' } }, res, { uid: 'userA' }));
+    } finally {
+        console.warn = savedWarn;
+    }
+    assert.strictEqual(res.statusCode, 200);
+    assert.deepStrictEqual(res.body.payload.devices.map((d) => d.id).sort(), ['gdA', 'udA']);
+    assert.ok(warns.some((w) => w.includes('udGoneId')) && warns.some((w) => w.includes('udGoneRef')));
+});
+
 test('userOwnsDevice: 自分の user_device / 所属グループの group_device は true', async () => {
     assert.strictEqual(await Model.userOwnsDevice('userA', 'udA'), true);
     assert.strictEqual(await Model.userOwnsDevice('userA', 'gdA'), true);
