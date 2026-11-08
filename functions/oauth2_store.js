@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('node:crypto');
 const { getDatabase } = require('firebase-admin/database');
 const { OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET } = require('./params');
 
@@ -12,7 +13,8 @@ const app_redirectUris = [
 const app_grants = ['authorization_code', 'refresh_token'];
 
 const setToDatabase = async (keytype, key, value = {}) => {
-    console.log('%s/%s set to database', keytype, key, JSON.stringify(value));
+    // key はトークン・認可コードそのもの、value もそれらを含むため、keytype のみ出力する。
+    console.log('%s set to database', keytype);
     if (!keytype) {
         throw new Error('KeyType required');
     }
@@ -29,7 +31,7 @@ const setToDatabase = async (keytype, key, value = {}) => {
 };
 
 const getFromDatabase = async (keytype, key) => {
-    console.log('%s/%s get from database', keytype, key);
+    console.log('%s get from database', keytype);
     if (!keytype) {
         throw new Error('KeyType required');
     }
@@ -49,15 +51,22 @@ exports.getAccessToken = (key) => {
     return getFromDatabase('accesstoken', key);
 };
 
+// 長さの違いも含めて比較時間から推測されないよう、SHA-256 ダイジェスト同士を定数時間で比較する。
+const safeEqual = (a, b) => {
+    const da = crypto.createHash('sha256').update(String(a)).digest();
+    const db = crypto.createHash('sha256').update(String(b)).digest();
+    return crypto.timingSafeEqual(da, db);
+};
+
 exports.getClient = async (client_id, client_secret) => {
     const clientId = app_clientId();
     if (client_id !== clientId) {
-        console.error('mismatch client id', client_id, clientId);
+        console.error('mismatch client id');
         return null;
     }
     const clientSecret = app_clientSecret();
-    if (client_secret && client_secret !== clientSecret) {
-        console.error('mismatch client secret', client_secret, clientSecret);
+    if (client_secret && !safeEqual(client_secret, clientSecret)) {
+        console.error('mismatch client secret');
         return null;
     }
     return {

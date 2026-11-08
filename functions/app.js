@@ -2,15 +2,15 @@
 
 const OAuth2Server = require("oauth2-server");
 const { HOMEGRAPH_API_KEY } = require('./params');
-const { showError } = require('./utils');
+const { showError, redactForLog } = require('./utils');
 const { sync, query, execute } = require('./intents');
 
 const requestSyncEndpoint = 'https://homegraph.googleapis.com/v1/devices:requestSync?key=';
 const reportStateEndpoint = 'https://homegraph.googleapis.com/v1/devices?key=';
 
 exports.requestsync = async (req, res) => {
-    console.info('/request-sync query', req.query);
-    console.info('/request-sync body', req.body);
+    console.info('/request-sync query', redactForLog(req.query));
+    console.info('/request-sync body', redactForLog(req.body));
     const oauth = new OAuth2Server({ model: require("./oauth2").AuthModel });
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
@@ -23,7 +23,7 @@ exports.requestsync = async (req, res) => {
     };
     try {
         const auth = await oauth.authenticate(request, response);
-        console.info('Auth OK', auth);
+        console.info('Auth OK', auth.user.id);
         options.body = JSON.stringify({ agentUserId: auth.user.id });
         const fetchRes = await fetch(requestSyncEndpoint + apiKey, options);
         console.log("request-sync:", fetchRes.status, fetchRes.statusText);
@@ -34,8 +34,8 @@ exports.requestsync = async (req, res) => {
 };
 
 exports.reportstate = async (req, res) => {
-    console.info('/report-state query', req.query);
-    console.info('/report-state body', req.body);
+    console.info('/report-state query', redactForLog(req.query));
+    console.info('/report-state body', redactForLog(req.body));
     const oauth = new OAuth2Server({ model: require("./oauth2").AuthModel });
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
@@ -48,7 +48,7 @@ exports.reportstate = async (req, res) => {
     };
     try {
         const auth = await oauth.authenticate(request, response);
-        console.info('Auth OK', auth);
+        console.info('Auth OK', auth.user.id);
         if (!req.body?.devices) {
             throw new SyntaxError('devices required');
         }
@@ -66,14 +66,14 @@ exports.reportstate = async (req, res) => {
 };
 
 exports.root = async (req, res) => {
-    console.info('/ query', JSON.stringify(req.query));
-    console.info('/ body', JSON.stringify(req.body));
+    console.info('/ query', JSON.stringify(redactForLog(req.query)));
+    console.info('/ body', JSON.stringify(redactForLog(req.body)));
     const oauth = new OAuth2Server({ model: require("./oauth2").AuthModel });
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
     try {
         const auth = await oauth.authenticate(request, response);
-        console.info('Auth OK', auth);
+        console.info('Auth OK', auth.user.id);
         const inputs = req.body?.inputs;
         if (!Array.isArray(inputs)) {
             return showError(res, "missing inputs");

@@ -42,9 +42,29 @@ const showError = (res, error) => {
     return;
 };
 
+// ログ出力用に、シークレット・トークン類のキーの値を '[REDACTED]' に置き換えたコピーを返す。
+// キー名は大文字小文字を区別せず、ネストしたオブジェクト・配列も再帰的に処理する。入力は変更しない。
+const SENSITIVE_KEYS = new Set([
+    'client_secret', 'code', 'refresh_token', 'access_token', 'token', 'password', 'authorization', 'id_token'
+]);
+const redactForLog = (value) => {
+    if (Array.isArray(value)) {
+        return value.map(redactForLog);
+    }
+    if (value === null || typeof value !== 'object') {
+        return value;
+    }
+    const out = {};
+    for (const [key, v] of Object.entries(value)) {
+        out[key] = SENSITIVE_KEYS.has(key.toLowerCase()) ? '[REDACTED]' : redactForLog(v);
+    }
+    return out;
+};
+
 module.exports = {
     valuniq,
     flatten,
     isClientOAuthError,
-    showError
+    showError,
+    redactForLog
 };

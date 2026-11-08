@@ -3,7 +3,7 @@
 const { getAuth } = require('firebase-admin/auth');
 const OAuth2Server = require("oauth2-server");
 const AuthStore = require("./oauth2_store");
-const { isClientOAuthError } = require('./utils');
+const { isClientOAuthError, redactForLog } = require('./utils');
 const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
 
 const AuthModel = {
@@ -25,7 +25,7 @@ const AuthModel = {
         }
     },
     getRefreshToken: async (refreshToken) => {
-        console.log('getRefreshToken:', refreshToken);
+        console.log('getRefreshToken');
         try {
             const token = await AuthStore.getRefreshToken(refreshToken);
             if (!token) return null;
@@ -43,7 +43,7 @@ const AuthModel = {
         }
     },
     getAuthorizationCode: async (authCode) => {
-        console.log('getAuthorizationCode:', authCode);
+        console.log('getAuthorizationCode');
         try {
             const code = await AuthStore.getAuthorizationCode(authCode);
             if (!code) return null;
@@ -62,7 +62,7 @@ const AuthModel = {
         }
     },
     getClient: async (clientId, clientSecret) => {
-        console.log('getClient:', clientId, clientSecret);
+        console.log('getClient:', clientId);
         try {
             const client = await AuthStore.getClient(clientId, clientSecret);
             if (!client) return null;
@@ -77,7 +77,7 @@ const AuthModel = {
         }
     },
     saveToken: async (token, client, user) => {
-        console.log('saveToken:', token, client, user);
+        console.log('saveToken:', client?.id, user?.id);
         try {
             const accessTokenPromise = AuthStore.setAccessTokens(token.accessToken, {
                 access_token: token.accessToken,
@@ -108,7 +108,7 @@ const AuthModel = {
         }
     },
     saveAuthorizationCode: async (code, client, user) => {
-        console.log('saveAuthorizationCode:', code, client, user);
+        console.log('saveAuthorizationCode:', client?.id, user?.id);
         try {
             const authorizationCode = await AuthStore.setAuthCode(code.authorizationCode, {
                 authorization_code: code.authorizationCode,
@@ -130,7 +130,7 @@ const AuthModel = {
         }
     },
     revokeToken: async (token) => {
-        console.log('revokeToken:', token);
+        console.log('revokeToken:', token?.client?.id, token?.user?.id);
         try {
             await AuthStore.unsetRefreshToken(token.refreshToken);
             return true;
@@ -140,7 +140,7 @@ const AuthModel = {
         }
     },
     revokeAuthorizationCode: async (code) => {
-        console.log('revokeAuthorizationCode:', code);
+        console.log('revokeAuthorizationCode:', code?.client?.id, code?.user?.id);
         try {
             await AuthStore.unsetAuthCode(code.code);
             return true;
@@ -154,8 +154,8 @@ const AuthModel = {
 const oauth = new OAuth2Server({ model: AuthModel });
 
 exports.auth = async (req, res, _next) => {
-    console.info('/auth query', req.query);
-    console.info('/auth body', req.body);
+    console.info('/auth query', redactForLog(req.query));
+    console.info('/auth body', redactForLog(req.body));
     const redirect_uri = (req.query?.redirect_uri || req.body?.redirect_uri);
     const state = (req.query?.state || req.body?.state);
     const bearer = req.headers.authorization;
@@ -193,8 +193,8 @@ exports.auth = async (req, res, _next) => {
 };
 
 exports.token = async (req, res, _next) => {
-    console.info('/token query', req.query);
-    console.info('/token body', req.body);
+    console.info('/token query', redactForLog(req.query));
+    console.info('/token body', redactForLog(req.body));
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
     // refresh token will expire in 10 years.
