@@ -246,7 +246,8 @@ test('redactForLog: 機微なキーを大文字小文字を問わず再帰的に
     };
     const snapshot = JSON.parse(JSON.stringify(input));
     const out = redactForLog(input);
-    assert.deepStrictEqual(out, {
+    // redactForLog の戻り値は null プロトタイプなので、deepStrictEqual 用に通常のオブジェクトへ変換する。
+    assert.deepStrictEqual(toPlain(out), {
         Client_Secret: '[REDACTED]', code: '[REDACTED]', refresh_token: '[REDACTED]', ACCESS_TOKEN: '[REDACTED]',
         token: '[REDACTED]', password: '[REDACTED]', Authorization: '[REDACTED]', id_token: '[REDACTED]',
         grant_type: 'authorization_code', client_id: 'client-id',
@@ -255,11 +256,29 @@ test('redactForLog: 機微なキーを大文字小文字を問わず再帰的に
     assert.deepStrictEqual(input, snapshot);
 });
 
+test('redactForLog: camelCase / kebab-case のキーも伏せる', () => {
+    const out = redactForLog({
+        clientSecret: 's', refreshToken: 'r', idToken: 'i', accessToken: 'a', 'client-secret': 'c', Access_Token: 'x', keep: 1,
+    });
+    assert.deepStrictEqual({ ...out }, {
+        clientSecret: '[REDACTED]', refreshToken: '[REDACTED]', idToken: '[REDACTED]', accessToken: '[REDACTED]',
+        'client-secret': '[REDACTED]', Access_Token: '[REDACTED]', keep: 1,
+    });
+});
+
+test('redactForLog: JSON 由来の own __proto__ キーも保持する', () => {
+    const input = JSON.parse('{"__proto__": {"code": "c", "keep": 1}, "a": 1}');
+    const out = redactForLog(input);
+    assert.ok(Object.hasOwn(out, '__proto__'));
+    assert.deepStrictEqual({ ...out['__proto__'] }, { code: '[REDACTED]', keep: 1 });
+    assert.ok(JSON.stringify(out).includes('__proto__'));
+});
+
 test('redactForLog: オブジェクト以外はそのまま返す', () => {
     for (const v of [undefined, null, 'str', 42, true]) {
         assert.strictEqual(redactForLog(v), v);
     }
-    assert.deepStrictEqual(redactForLog([{ token: 'x' }]), [{ token: '[REDACTED]' }]);
+    assert.deepStrictEqual(toPlain(redactForLog([{ token: 'x' }])), [{ token: '[REDACTED]' }]);
 });
 
 test('store.getClient: 配列・オブジェクトの secret (extended urlencoded) は一致しても null', async () => {
