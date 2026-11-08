@@ -6,7 +6,7 @@
   "private": true,
   "license": "MIT",
   "engines": {
-    "node": "22"
+    "node": "24"
   },
   "dependencies": {
     "@snyk/protect": "^1.1308.3",
@@ -32,7 +32,7 @@
   },
   "scripts": {
     "lint": "eslint",
-    "test": "node --test test/",
+    "test": "node --test \"test/**/*.test.js\"",
     "prepublish": "npm run snyk-protect",
     "snyk-protect": "snyk-protect"
   },
